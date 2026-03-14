@@ -260,7 +260,7 @@ function render(){
   });
   document.querySelector('#prompt-table tbody').innerHTML=pRows;
 
-  // Domain charts
+  // Domain charts \u2014 use loose equality (==) for is_ecosystem to handle int/string/bool
   var ecoDom={},extDom={};
   fd.forEach(function(r){
     var isEco = (r.is_ecosystem == 1 || r.is_ecosystem === true);
@@ -271,16 +271,18 @@ function render(){
   ecoS.sort(function(a,b){return b[1]-a[1];});
   var ecoTotD=0;ecoS.forEach(function(e){ecoTotD+=e[1];});
   document.getElementById('eco-dom-title').textContent='Ecosistema Alegra ('+ecoTotD+' citas)';
+  document.getElementById('chart-eco-doms').innerHTML='';
   if(ecoS.length){
-    Plotly.newPlot('chart-eco-doms',[{type:'bar',orientation:'h',y:ecoS.map(function(e){return e[0];}),x:ecoS.map(function(e){return e[1];}),marker:{color:'#2DD4BF'},text:ecoS.map(function(e){return e[1];}),textposition:'outside',textfont:{size:11,color:'#F1F5F9'}}],Object.assign({},DL,{height:Math.max(150,ecoS.length*45+50),margin:{t:10,b:30,l:200,r:40},xaxis:Object.assign({},DL.xaxis,{title:{text:'Citas',font:{size:10}}}),yaxis:Object.assign({},DL.yaxis,{autorange:'reversed',title:'',tickfont:{size:11}})}),{responsive:true,displayModeBar:false});
+    Plotly.newPlot('chart-eco-doms',[{type:'bar',orientation:'h',y:ecoS.map(function(e){return e[0];}),x:ecoS.map(function(e){return parseInt(e[1]);}),marker:{color:'#2DD4BF'},text:ecoS.map(function(e){return e[1];}),textposition:'outside',textfont:{size:11,color:'#F1F5F9'}}],Object.assign({},DL,{height:Math.max(150,ecoS.length*45+50),margin:{t:10,b:30,l:200,r:40},xaxis:Object.assign({},DL.xaxis,{rangemode:'tozero',dtick:1,title:{text:'Citas',font:{size:10}}}),yaxis:Object.assign({},DL.yaxis,{autorange:'reversed',title:'',tickfont:{size:11}})}),{responsive:true,displayModeBar:false});
   }else{document.getElementById('chart-eco-doms').innerHTML='<p style="color:#FBBF24;font-size:11px">Sin citas del ecosistema</p>';}
 
   var extS=[];for(var d2 in extDom)extS.push([d2,extDom[d2]]);
   extS.sort(function(a,b){return b[1]-a[1];});extS=extS.slice(0,10);
   var extTotD=0;for(var d3 in extDom)extTotD+=extDom[d3];
   document.getElementById('ext-dom-title').textContent='Fuentes Externas Top 10 ('+extTotD+' citas)';
+  document.getElementById('chart-ext-doms').innerHTML='';
   if(extS.length){
-    Plotly.newPlot('chart-ext-doms',[{type:'bar',orientation:'h',y:extS.map(function(e){return e[0];}),x:extS.map(function(e){return e[1];}),marker:{color:'#64748B'},text:extS.map(function(e){return e[1];}),textposition:'outside',textfont:{size:11,color:'#F1F5F9'}}],Object.assign({},DL,{height:Math.max(200,extS.length*35+50),margin:{t:10,b:30,l:200,r:40},xaxis:Object.assign({},DL.xaxis,{title:{text:'Citas',font:{size:10}}}),yaxis:Object.assign({},DL.yaxis,{autorange:'reversed',title:'',tickfont:{size:11}})}),{responsive:true,displayModeBar:false});
+    Plotly.newPlot('chart-ext-doms',[{type:'bar',orientation:'h',y:extS.map(function(e){return e[0];}),x:extS.map(function(e){return parseInt(e[1]);}),marker:{color:'#64748B'},text:extS.map(function(e){return e[1];}),textposition:'outside',textfont:{size:11,color:'#F1F5F9'}}],Object.assign({},DL,{height:Math.max(200,extS.length*35+50),margin:{t:10,b:30,l:200,r:40},xaxis:Object.assign({},DL.xaxis,{rangemode:'tozero',dtick:1,title:{text:'Citas',font:{size:10}}}),yaxis:Object.assign({},DL.yaxis,{autorange:'reversed',title:'',tickfont:{size:11}})}),{responsive:true,displayModeBar:false});
   }
 
   // Insights
