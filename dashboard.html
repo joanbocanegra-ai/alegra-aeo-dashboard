@@ -134,15 +134,21 @@ function populateFilters(){
   addO('f-pais',Object.keys(s.p));addO('f-funnel',Object.keys(s.f));addO('f-cat',Object.keys(s.c));addO('f-motor',Object.keys(s.m),function(m){return ML[m]||m;});
 }
 function addO(id,arr,fn){var el=document.getElementById(id);arr.sort().forEach(function(v){var o=document.createElement('option');o.value=v;o.textContent=fn?fn(v):v;el.appendChild(o);});}
-function filt(d){var fp=document.getElementById('f-pais').value,ff=document.getElementById('f-funnel').value,fc=document.getElementById('f-cat').value,fm=document.getElementById('f-motor').value;return d.filter(function(r){return(!fp||r.country_id===fp)&&(!ff||r.funnel_stage===ff)&&(!fc||r.product_category===fc)&&(!fm||r.model_source===fm);});}
+function filt(d){var fp=document.getElementById('f-pais').value,ff=document.getElementById('f-funnel').value,fc=document.getElementById('f-cat').value,fm=document.getElementById('f-motor').value;return d.filter(function(r){return(!fp||r.country_id===fp)&&(!ff||!r.hasOwnProperty('funnel_stage')||r.funnel_stage===ff)&&(!fc||!r.hasOwnProperty('product_category')||r.product_category===fc)&&(!fm||r.model_source===fm);});}
 
+function filtDom(metFiltered){
+  // Filter dominios based on prompt_ids and model_sources present in filtered metricas
+  var keys={};
+  metFiltered.forEach(function(r){keys[r.prompt_id+'|'+r.model_source]=1;});
+  return dominios.filter(function(r){return keys[r.prompt_id+'|'+r.model_source];});
+}
 function render(){
-  var fm=filt(metricas),fb=filt(marcas),fd=filt(dominios);
+  var fm=filt(metricas),fb=filt(marcas),fd=filtDom(fm);
   if(!fm.length){document.getElementById('main-content').innerHTML='<p style="color:#FBBF24;margin-top:40px">Sin datos para los filtros seleccionados.</p>';return;}
   var batch=metricas[0].batch_date;
-  document.getElementById('header-sub').textContent='Dashboard MVP · Batch '+batch+' · '+fm.length+' prompt×motor';
+  document.getElementById('header-sub').textContent='Dashboard MVP \u00b7 Batch '+batch+' \u00b7 '+fm.length+' prompt\u00d7motor';
   var tOK=0,tR=0;fm.forEach(function(r){tOK+=r.num_success;tR+=r.num_replicates;});
-  document.getElementById('header-badges').innerHTML='<span class="badge" style="background:#34D39922;color:#34D399">● '+tOK+'/'+tR+' OK</span><span class="badge" style="background:#60A5FA22;color:#60A5FA">MX</span>';
+  document.getElementById('header-badges').innerHTML='<span class="badge" style="background:#34D39922;color:#34D399">\u25cf '+tOK+'/'+tR+' OK</span><span class="badge" style="background:#60A5FA22;color:#60A5FA">MX</span>';
   document.getElementById('sidebar-info').innerHTML='Batch: '+batch+'<br>Arquitectura Dual';
   document.getElementById('footer-batch').textContent=batch;
 
@@ -156,15 +162,15 @@ function render(){
   fb.forEach(function(r){if(!bAgg[r.brand_name])bAgg[r.brand_name]={s:0,c:0,m:0};bAgg[r.brand_name].s+=r.brand_rank_avg;bAgg[r.brand_name].c++;bAgg[r.brand_name].m+=r.brand_mentions_total;});
   var bR=[];for(var b in bAgg){bR.push({n:b,p:bAgg[b].s/bAgg[b].c,a:bAgg[b].c,m:bAgg[b].m});}
   bR.sort(function(a,b){return a.p-b.p;});
-  var topB=bR.length?bR[0]:{n:'—',p:0};
+  var topB=bR.length?bR[0]:{n:'\u2014',p:0};
 
   var kpis=[
     {l:'Mention Rate',v:Math.round(avgMR*100)+'%',c:'#2DD4BF',s:'Promedio '+fm.length+' combos'},
     {l:'Citation Rate',v:Math.round(avgCR*100)+'%',c:'#60A5FA',s:'Marca citada como fuente'},
     {l:'Alegra Pos. Avg',v:'#'+avgRk.toFixed(1),c:'#FB923C',s:'Rank ponderado Alegra'},
-    {l:'Marca Líder',v:topB.n,c:'#F472B6',s:'Pos. ponderada #'+topB.p.toFixed(1)},
+    {l:'Marca L\u00edder',v:topB.n,c:'#F472B6',s:'Pos. ponderada #'+topB.p.toFixed(1)},
     {l:'Eco Share',v:Math.round(ecoPct)+'%',c:'#34D399',s:ecoT+'/'+totT+' citas ecosistema'},
-    {l:'Prompts',v:nP,c:'#FBBF24',s:fm.length+' prompt×motor'}
+    {l:'Prompts',v:nP,c:'#FBBF24',s:fm.length+' prompt\u00d7motor'}
   ];
   var khtml='';kpis.forEach(function(k){khtml+='<div class="kpi-card"><div class="kpi-label">'+k.l+'</div><div class="kpi-value" style="color:'+k.c+'">'+k.v+'</div><div class="kpi-sub">'+k.s+'</div></div>';});
   document.getElementById('kpi-row').innerHTML=khtml;
@@ -194,8 +200,8 @@ function render(){
     textposition:'outside',textfont:{size:12,color:'#F1F5F9'}
   };});
   Plotly.newPlot('chart-pos',posTraces,Object.assign({},DL,{barmode:'group',height:320,
-    title:{text:'Posición Promedio de Alegra',font:{size:13,color:'#F1F5F9'}},
-    xaxis:Object.assign({},DL.xaxis,{range:[0,7],title:{text:'Posición (menor = mejor)',font:{size:10}},dtick:1,tickvals:[1,2,3,4,5,6,7]}),
+    title:{text:'Posici\u00f3n Promedio de Alegra',font:{size:13,color:'#F1F5F9'}},
+    xaxis:Object.assign({},DL.xaxis,{range:[0,7],title:{text:'Posici\u00f3n (menor = mejor)',font:{size:10}},dtick:1,tickvals:[1,2,3,4,5,6,7]}),
     yaxis:Object.assign({},DL.yaxis,{title:'',type:'category',categoryorder:'array',categoryarray:prompts.reverse()}),
     legend:{orientation:'h',y:1.15,title:'',font:{size:10}},margin:{t:50,b:50,l:80,r:60}
   }),{responsive:true,displayModeBar:false});
@@ -219,9 +225,9 @@ function render(){
     marker:{color:bR.map(function(b){return BC[b.n]||'#64748B';})},
     text:bR.map(function(b){return '#'+b.p.toFixed(1);}),textposition:'outside',textfont:{size:12,color:'#F1F5F9'}
   }],Object.assign({},DL,{height:Math.max(300,bR.length*42+60),
-    title:{text:'Posición Promedio por Marca (Ponderada)',font:{size:13,color:'#F1F5F9'}},
+    title:{text:'Posici\u00f3n Promedio por Marca (Ponderada)',font:{size:13,color:'#F1F5F9'}},
     margin:{t:50,b:30,l:110,r:50},
-    xaxis:Object.assign({},DL.xaxis,{range:[0,maxPos+2],title:{text:'Posición (menor = mejor)',font:{size:10}}}),
+    xaxis:Object.assign({},DL.xaxis,{range:[0,maxPos+2],title:{text:'Posici\u00f3n (menor = mejor)',font:{size:10}}}),
     yaxis:Object.assign({},DL.yaxis,{autorange:'reversed',title:'',tickfont:{size:12}})
   }),{responsive:true,displayModeBar:false});
 
@@ -229,13 +235,13 @@ function render(){
   var lH='';
   fm.forEach(function(r){
     var ml=ML[r.model_source]||r.model_source,mc=MC[r.model_source]||'#999',bc=BC[r.top_brand]||'#64748B';
-    lH+='<div class="leader-row"><div><span style="font-size:12px;font-weight:600">'+r.prompt_id+'</span><span style="background:'+mc+'22;color:'+mc+';padding:2px 7px;border-radius:4px;font-size:9px;font-weight:600;margin-left:7px">'+ml+'</span></div><div><span style="font-size:9px;color:var(--muted)">Líder:</span> <span style="background:'+bc+'22;color:'+bc+';padding:2px 7px;border-radius:4px;font-size:10px;font-weight:600">'+r.top_brand+'</span> <span style="font-weight:700;color:'+bc+';font-size:11px">#'+r.top_brand_rank.toFixed(1)+'</span></div></div>';
+    lH+='<div class="leader-row"><div><span style="font-size:12px;font-weight:600">'+r.prompt_id+'</span><span style="background:'+mc+'22;color:'+mc+';padding:2px 7px;border-radius:4px;font-size:9px;font-weight:600;margin-left:7px">'+ml+'</span></div><div><span style="font-size:9px;color:var(--muted)">L\u00edder:</span> <span style="background:'+bc+'22;color:'+bc+';padding:2px 7px;border-radius:4px;font-size:10px;font-weight:600">'+r.top_brand+'</span> <span style="font-weight:700;color:'+bc+';font-size:11px">#'+r.top_brand_rank.toFixed(1)+'</span></div></div>';
   });
   document.getElementById('leader-list').innerHTML=lH;
 
   if(bR.length){
     var ldr=bR[0],lc=BC[ldr.n]||'#64748B';
-    document.getElementById('overall-leader').innerHTML='<div class="overall-leader"><div style="font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--muted);margin-bottom:5px">Marca Líder Ponderada (Todos los filtros)</div><div style="display:flex;align-items:center;gap:8px"><span style="font-size:16px">🏆</span><span style="font-size:16px;font-weight:700;color:'+lc+'">'+ldr.n+'</span><span style="font-size:12px;color:var(--muted)">Pos. ponderada <strong style="color:var(--text)">#'+ldr.p.toFixed(1)+'</strong></span></div><div style="font-size:10px;color:var(--dim);margin-top:3px">'+ldr.a+'/'+fm.length+' combinaciones · '+ldr.m+' menciones totales</div></div>';
+    document.getElementById('overall-leader').innerHTML='<div class="overall-leader"><div style="font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--muted);margin-bottom:5px">Marca L\u00edder Ponderada (Todos los filtros)</div><div style="display:flex;align-items:center;gap:8px"><span style="font-size:16px">\ud83c\udfc6</span><span style="font-size:16px;font-weight:700;color:'+lc+'">'+ldr.n+'</span><span style="font-size:12px;color:var(--muted)">Pos. ponderada <strong style="color:var(--text)">#'+ldr.p.toFixed(1)+'</strong></span></div><div style="font-size:10px;color:var(--dim);margin-top:3px">'+ldr.a+'/'+fm.length+' combinaciones \u00b7 '+ldr.m+' menciones totales</div></div>';
   }
 
   // Brand detail table
@@ -249,12 +255,12 @@ function render(){
   // Prompt detail table
   var pRows='';
   fm.forEach(function(r){
-    var ps=r.prompt_text.length>80?r.prompt_text.substring(0,80)+'…':r.prompt_text;
+    var ps=r.prompt_text.length>80?r.prompt_text.substring(0,80)+'\u2026':r.prompt_text;
     pRows+='<tr><td>'+r.prompt_id+'</td><td title="'+r.prompt_text.replace(/"/g,'&quot;')+'">'+ps+'</td><td>'+r.funnel_stage+'</td><td>'+r.product_category+'</td><td>'+(ML[r.model_source]||r.model_source)+'</td><td>'+r.mention_rate.toFixed(2)+'</td><td>'+r.citation_rate.toFixed(2)+'</td><td>'+r.consistency_score.toFixed(0)+'</td><td>#'+r.avg_rank_alegra.toFixed(1)+'</td><td>'+r.eco_share_pct.toFixed(0)+'%</td><td>'+r.total_cites+'</td></tr>';
   });
   document.querySelector('#prompt-table tbody').innerHTML=pRows;
 
-  // Domain charts — use loose equality (==) for is_ecosystem to handle int/string/bool
+  // Domain charts
   var ecoDom={},extDom={};
   fd.forEach(function(r){
     var isEco = (r.is_ecosystem == 1 || r.is_ecosystem === true);
@@ -279,16 +285,16 @@ function render(){
 
   // Insights
   var aC=fm.filter(function(r){return r.model_source==='chatgpt_search';}),aA=fm.filter(function(r){return r.model_source==='google_aio';});
-  var avgC=aC.length?(aC.reduce(function(s,r){return s+r.avg_rank_alegra;},0)/aC.length).toFixed(1):'—';
-  var avgA=aA.length?(aA.reduce(function(s,r){return s+r.avg_rank_alegra;},0)/aA.length).toFixed(1):'—';
+  var avgC=aC.length?(aC.reduce(function(s,r){return s+r.avg_rank_alegra;},0)/aC.length).toFixed(1):'\u2014';
+  var avgA=aA.length?(aA.reduce(function(s,r){return s+r.avg_rank_alegra;},0)/aA.length).toFixed(1):'\u2014';
   var nCite=fm.filter(function(r){return r.model_source==='chatgpt_search'&&r.citation_rate===0;}).map(function(r){return r.prompt_id;});
   var bLdS={};fm.filter(function(r){return r.product_category==='Branded';}).forEach(function(r){bLdS[r.top_brand]=1;});var bLd=Object.keys(bLdS);
   var gLdS={};fm.filter(function(r){return r.product_category!=='Branded';}).forEach(function(r){gLdS[r.top_brand]=1;});var gLd=Object.keys(gLdS);
 
   document.getElementById('insight-row').innerHTML=
-    '<div class="insight-box"><div class="insight-title" style="color:#FB923C">Posición de Alegra</div><div class="insight-body">'+(aC.length?'ChatGPT: posición <strong>#'+avgC+'</strong>. ':'')+(aA.length?'AI Overview: <strong>#'+avgA+'</strong>. ':'')+'En Branded la marca alcanza el #1. En genéricos BOFU cae a #4-5 por detrás de CONTPAQi y Aspel.</div></div>'+
-    '<div class="insight-box"><div class="insight-title" style="color:#F472B6">Marca líder por segmento</div><div class="insight-body">'+(bLd.length?'<strong>Branded:</strong> '+bLd.join(', ')+' lidera(n). ':'')+(gLd.length?'<strong>Genérico:</strong> '+gLd.join(', ')+' lidera(n). ':'')+'CONTPAQi domina los prompts genéricos BOFU en AI Overview. Alegra necesita estrategia para escalar posición orgánica.</div></div>'+
-    '<div class="insight-box"><div class="insight-title" style="color:#2DD4BF">Oportunidad competitiva</div><div class="insight-body">'+(nCite.length?'ChatGPT no cita a Alegra en: <strong>'+nCite.join(', ')+'</strong>. ':'')+'programascontabilidad.com es la fuente del ecosistema más citada por AI Overview — pero ChatGPT la ignora. Priorizar contenido linkeable desde fuentes terceras.</div></div>';
+    '<div class="insight-box"><div class="insight-title" style="color:#FB923C">Posici\u00f3n de Alegra</div><div class="insight-body">'+(aC.length?'ChatGPT: posici\u00f3n <strong>#'+avgC+'</strong>. ':'')+(aA.length?'AI Overview: <strong>#'+avgA+'</strong>. ':'')+'En Branded la marca alcanza el #1. En gen\u00e9ricos BOFU cae a #4-5 por detr\u00e1s de CONTPAQi y Aspel.</div></div>'+
+    '<div class="insight-box"><div class="insight-title" style="color:#F472B6">Marca l\u00edder por segmento</div><div class="insight-body">'+(bLd.length?'<strong>Branded:</strong> '+bLd.join(', ')+' lidera(n). ':'')+(gLd.length?'<strong>Gen\u00e9rico:</strong> '+gLd.join(', ')+' lidera(n). ':'')+'CONTPAQi domina los prompts gen\u00e9ricos BOFU en AI Overview. Alegra necesita estrategia para escalar posici\u00f3n org\u00e1nica.</div></div>'+
+    '<div class="insight-box"><div class="insight-title" style="color:#2DD4BF">Oportunidad competitiva</div><div class="insight-body">'+(nCite.length?'ChatGPT no cita a Alegra en: <strong>'+nCite.join(', ')+'</strong>. ':'')+'programascontabilidad.com es la fuente del ecosistema m\u00e1s citada por AI Overview \u2014 pero ChatGPT la ignora. Priorizar contenido linkeable desde fuentes terceras.</div></div>';
 }
 
 populateFilters();
