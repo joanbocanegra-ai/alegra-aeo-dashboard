@@ -654,26 +654,46 @@ _ML_REV = {v: k for k, v in ML.items()}
     Input("prompt-table", "active_cell"),
     Input("drill-close-btn", "n_clicks"),
     State("prompt-table-keys", "data"),
+    State("f-pais", "value"),
+    State("f-funnel", "value"),
+    State("f-cat", "value"),
+    State("f-motor", "value"),
     prevent_initial_call=True,
 )
-def drill_down(active_cell, close_clicks, keys_data):
+def drill_down(active_cell, close_clicks, keys_data, pais, funnel, cat, motor):
     hidden = {"display": "none"}
 
     # Close button clicked
     if ctx.triggered_id == "drill-close-btn":
         return [], hidden
 
-    # No cell selected or no keys
-    if not active_cell or not keys_data:
+    # No cell selected
+    if not active_cell:
         return [], hidden
 
     row_idx = active_cell["row"]
-    if row_idx >= len(keys_data):
-        return [], hidden
 
-    key = keys_data[row_idx]
-    prompt_id = key.get("prompt_id", "")
-    model_source = key.get("model_source", "")
+    # Try keys_data first (populated by dcc.Store)
+    if keys_data and row_idx < len(keys_data):
+        key = keys_data[row_idx]
+        prompt_id = key.get("prompt_id", "")
+        model_source = key.get("model_source", "")
+    else:
+        # Fallback: reconstruct row order from current filters (same logic as main callback)
+        fm = MET.copy()
+        if pais:
+            fm = fm[fm["country_id"] == pais]
+        if funnel:
+            fm = fm[fm["funnel_stage"] == funnel]
+        if cat:
+            fm = fm[fm["product_category"] == cat]
+        if motor:
+            fm = fm[fm["model_source"] == motor]
+        if row_idx >= len(fm):
+            return [], hidden
+        row = fm.iloc[row_idx]
+        prompt_id = row["prompt_id"]
+        model_source = row["model_source"]
 
     # Look up full metric row
     met_row = MET[(MET["prompt_id"] == prompt_id) & (MET["model_source"] == model_source)]
