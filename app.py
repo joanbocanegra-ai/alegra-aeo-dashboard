@@ -69,7 +69,9 @@ app.index_string = '''<!DOCTYPE html>
 :root{--bg:#0B1120;--surface:#111827;--card:#1a2234;--border:#2a3550;--text:#F1F5F9;--muted:#94A3B8;--dim:#64748B;--teal:#2DD4BF;--blue:#60A5FA;--amber:#FBBF24;--green:#34D399;--red:#F87171;--orange:#FB923C;--purple:#A78BFA;--pink:#F472B6}
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
-#react-entry-point{display:flex;min-height:100vh}
+#react-entry-point{min-height:100vh}
+._dash-app-content{display:flex;min-height:100vh}
+.app-root{display:flex;min-height:100vh;width:100%}
 .sidebar{width:220px;background:var(--surface);border-right:1px solid var(--border);padding:20px 14px;flex-shrink:0;position:sticky;top:0;height:100vh;overflow-y:auto}
 .main{flex:1;padding:20px 28px;max-width:1300px}
 .sidebar-title{font-size:15px;font-weight:700;margin-bottom:2px}
@@ -116,7 +118,7 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
 </style></head><body>{%app_entry%}{%config%}{%scripts%}{%renderer%}</body></html>'''
 
 # ── Layout ────────────────────────────────────────────────────────────
-app.layout = html.Div(className="", children=[
+app.layout = html.Div(className="app-root", children=[
     html.Aside(className="sidebar", children=[
         html.Div("\U0001f4ca Alegra AEO", className="sidebar-title"),
         html.Div("Golden Stack Dashboard", className="sidebar-sub"),
