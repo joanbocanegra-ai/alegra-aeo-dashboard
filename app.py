@@ -263,7 +263,12 @@ app.layout = html.Div(className="app-root", children=[
         # Store for prompt-table row keys (survives callback timing issues)
         dcc.Store(id="prompt-table-keys", data=[]),
         # Drill-down panel (hidden by default, shown on row click)
-        html.Div(id="drill-panel", style={"display": "none"}),
+        html.Div(id="drill-panel", className="drill-panel", style={"display": "none"}, children=[
+            html.Div(style={"display": "flex", "justifyContent": "flex-end", "marginBottom": "0px"}, children=[
+                html.Button("Cerrar", id="drill-close-btn", className="drill-close"),
+            ]),
+            html.Div(id="drill-panel-content"),
+        ]),
         # Domain maps
         html.Div("Mapa de Dominios Citados", className="section-label"),
         html.Div(className="chart-half", children=[
@@ -645,14 +650,13 @@ def update_dashboard(pais, funnel, cat, motor):
             insights, prompt_keys)
 
 
-# ── Drill-down callback ──────────────────────────────────────────────
+# ── Drill-down callback: OPEN on row click ──────────────────────────
 _ML_REV = {v: k for k, v in ML.items()}
 
 @callback(
-    Output("drill-panel", "children"),
+    Output("drill-panel-content", "children"),
     Output("drill-panel", "style"),
     Input("prompt-table", "active_cell"),
-    Input("drill-close-btn", "n_clicks"),
     State("prompt-table-keys", "data"),
     State("f-pais", "value"),
     State("f-funnel", "value"),
@@ -660,14 +664,9 @@ _ML_REV = {v: k for k, v in ML.items()}
     State("f-motor", "value"),
     prevent_initial_call=True,
 )
-def drill_down(active_cell, close_clicks, keys_data, pais, funnel, cat, motor):
+def drill_open(active_cell, keys_data, pais, funnel, cat, motor):
     hidden = {"display": "none"}
 
-    # Close button clicked
-    if ctx.triggered_id == "drill-close-btn":
-        return [], hidden
-
-    # No cell selected
     if not active_cell:
         return [], hidden
 
@@ -679,7 +678,7 @@ def drill_down(active_cell, close_clicks, keys_data, pais, funnel, cat, motor):
         prompt_id = key.get("prompt_id", "")
         model_source = key.get("model_source", "")
     else:
-        # Fallback: reconstruct row order from current filters (same logic as main callback)
+        # Fallback: reconstruct row order from current filters
         fm = MET.copy()
         if pais:
             fm = fm[fm["country_id"] == pais]
@@ -737,7 +736,6 @@ def drill_down(active_cell, close_clicks, keys_data, pais, funnel, cat, motor):
                 className="drill-meta",
             ),
         ]),
-        html.Button("Cerrar", id="drill-close-btn", className="drill-close"),
     ])
 
     # ── Column 1: Métricas AEO ────────────────────────────────────────
@@ -825,12 +823,22 @@ def drill_down(active_cell, close_clicks, keys_data, pais, funnel, cat, motor):
             "Sin citas externas", style={"fontSize": "10px", "color": "var(--dim)"}),
     ])
 
-    panel = html.Div(className="drill-panel", children=[
+    content = html.Div(children=[
         header,
         html.Div(className="drill-grid", children=[col1, col2, col3]),
     ])
 
-    return panel, {"display": "block"}
+    return content, {"display": "block"}
+
+
+# ── Drill-down callback: CLOSE on button click ──────────────────────
+@callback(
+    Output("drill-panel", "style", allow_duplicate=True),
+    Input("drill-close-btn", "n_clicks"),
+    prevent_initial_call=True,
+)
+def drill_close(n):
+    return {"display": "none"}
 
 
 if __name__ == "__main__":
