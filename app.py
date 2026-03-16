@@ -7,26 +7,44 @@ from dash import Dash, html, dcc, callback, Output, Input, State, ctx, dash_tabl
 # Dual mode: Supabase (PostgreSQL) in production, SQLite for local dev
 DATABASE_URL = os.environ.get("DATABASE_URL")
 
-def _get_connection():
-    """Return a DB connection — PostgreSQL if DATABASE_URL is set, else SQLite."""
-    if DATABASE_URL:
+_pg_engine = None
+def _get_engine():
+    global _pg_engine
+    if _pg_engine is None:
         from sqlalchemy import create_engine
-        return create_engine(DATABASE_URL).connect()
+        _pg_engine = create_engine(
+            DATABASE_URL,
+            pool_pre_ping=True,
+            pool_size=3,
+            max_overflow=5,
+            pool_recycle=300,
+            connect_args={"connect_timeout": 30},
+        )
+    return _pg_engine
+
+def load_data():
+    if DATABASE_URL:
+        engine = _get_engine()
+        with engine.connect() as conn:
+            met = pd.read_sql("SELECT * FROM metricas", conn)
+            mar = pd.read_sql("SELECT * FROM marcas", conn)
+            dom = pd.read_sql("SELECT * FROM dominios", conn)
+            try:
+                resp = pd.read_sql("SELECT * FROM respuestas", conn)
+            except Exception:
+                resp = pd.DataFrame(columns=["batch_id","prompt_id","model_source","replicate_id","raw_response_text","raw_citations_json"])
     else:
         from init_db import init_db
         init_db()
-        return sqlite3.connect(os.path.join(os.path.dirname(__file__), "aeo_data.db"))
-
-def load_data():
-    conn = _get_connection()
-    met = pd.read_sql("SELECT * FROM metricas", conn)
-    mar = pd.read_sql("SELECT * FROM marcas", conn)
-    dom = pd.read_sql("SELECT * FROM dominios", conn)
-    try:
-        resp = pd.read_sql("SELECT * FROM respuestas", conn)
-    except Exception:
-        resp = pd.DataFrame(columns=["batch_id","prompt_id","model_source","replicate_id","raw_response_text","raw_citations_json"])
-    conn.close()
+        conn = sqlite3.connect(os.path.join(os.path.dirname(__file__), "aeo_data.db"))
+        met = pd.read_sql("SELECT * FROM metricas", conn)
+        mar = pd.read_sql("SELECT * FROM marcas", conn)
+        dom = pd.read_sql("SELECT * FROM dominios", conn)
+        try:
+            resp = pd.read_sql("SELECT * FROM respuestas", conn)
+        except Exception:
+            resp = pd.DataFrame(columns=["batch_id","prompt_id","model_source","replicate_id","raw_response_text","raw_citations_json"])
+        conn.close()
     dom["cite_count"] = pd.to_numeric(dom["cite_count"], errors="coerce").fillna(0).astype(int)
     dom["is_ecosystem"] = dom["is_ecosystem"].apply(lambda v: v in (1, True, "1"))
     return met, mar, dom, resp
