@@ -4,13 +4,21 @@ import plotly.graph_objects as go
 from dash import Dash, html, dcc, callback, Output, Input, State, ctx, dash_table
 
 # ── DB ────────────────────────────────────────────────────────────────
-from init_db import init_db
-init_db()  # ensure DB exists with data
+# Dual mode: Supabase (PostgreSQL) in production, SQLite for local dev
+DATABASE_URL = os.environ.get("DATABASE_URL")
 
-DB = os.path.join(os.path.dirname(__file__), "aeo_data.db")
+def _get_connection():
+    """Return a DB connection — PostgreSQL if DATABASE_URL is set, else SQLite."""
+    if DATABASE_URL:
+        from sqlalchemy import create_engine
+        return create_engine(DATABASE_URL).connect()
+    else:
+        from init_db import init_db
+        init_db()
+        return sqlite3.connect(os.path.join(os.path.dirname(__file__), "aeo_data.db"))
 
 def load_data():
-    conn = sqlite3.connect(DB)
+    conn = _get_connection()
     met = pd.read_sql("SELECT * FROM metricas", conn)
     mar = pd.read_sql("SELECT * FROM marcas", conn)
     dom = pd.read_sql("SELECT * FROM dominios", conn)
