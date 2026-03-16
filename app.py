@@ -109,15 +109,37 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
 .insight-body{font-size:11px;color:var(--muted);line-height:1.6}
 .footer{text-align:center;font-size:10px;color:var(--dim);margin-top:28px;padding-top:14px;border-top:1px solid var(--border)}
 .footer a{color:var(--dim)}
-/* Dash dropdowns */
+/* ── Dash Dropdown (new Radix-based component) ── */
+.dash-dropdown{background:var(--card)!important;border:1px solid var(--border)!important;border-radius:6px!important;color:var(--text)!important;font-size:12px!important;padding:6px 10px!important;cursor:pointer!important;width:100%!important}
+.dash-dropdown:hover{border-color:var(--teal)!important}
+.dash-dropdown[data-state="open"]{border-color:var(--teal)!important;box-shadow:0 0 0 1px var(--teal)!important}
+.dash-dropdown .dash-dropdown-value,.dash-dropdown .dash-dropdown-value-item,.dash-dropdown .dash-dropdown-value-item span{color:var(--text)!important;font-weight:500!important;font-size:12px!important}
+.dash-dropdown .dash-dropdown-trigger-icon{color:var(--muted)!important}
+/* Dropdown menu/popover */
+[data-radix-popper-content-wrapper]{z-index:9999!important}
+.dash-dropdown-options,.dash-options-list{background:var(--card)!important;border:1px solid var(--border)!important;border-radius:8px!important;box-shadow:0 8px 24px rgba(0,0,0,0.4)!important;overflow:hidden!important}
+.dash-options-list-option,.dash-dropdown-option{background:var(--card)!important;color:var(--text)!important;padding:8px 12px!important;cursor:pointer!important;font-size:12px!important;border:none!important;transition:background .1s!important}
+.dash-options-list-option:hover,.dash-dropdown-option:hover{background:var(--surface)!important;color:var(--teal)!important}
+.dash-options-list-option.selected,.dash-dropdown-option.selected{background:rgba(45,212,191,0.12)!important;color:var(--teal)!important;font-weight:600!important}
+.dash-options-list-option input[type="radio"]{accent-color:var(--teal)!important}
+/* Legacy Select dropdowns (fallback) */
 .Select-control,.Select-menu-outer{background:var(--card)!important;border-color:var(--border)!important;color:var(--text)!important;font-size:12px!important}
-.Select-value-label,.Select-placeholder{color:var(--text)!important}
+.Select-value-label,.Select-value{color:var(--text)!important}
 .Select-option{background:var(--card)!important;color:var(--text)!important}
-.Select-option.is-focused{background:var(--surface)!important}
-.VirtualizedSelectOption{color:var(--text)!important}
+.Select-option.is-focused{background:var(--surface)!important;color:var(--teal)!important}
+.Select-option.is-selected{background:var(--border)!important;color:var(--teal)!important;font-weight:600!important}
+/* ── Dash DataTable ── */
 .dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner th{background:var(--surface)!important;color:var(--muted)!important;border-bottom:2px solid var(--border)!important;font-size:9px!important;text-transform:uppercase;letter-spacing:.05em;font-weight:600}
 .dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner td{background:var(--card)!important;color:var(--text)!important;border-bottom:1px solid var(--border)!important;font-size:11px!important}
-.dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner tr:hover td{background:rgba(45,212,191,0.04)!important}
+.dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner tr:hover td{background:rgba(45,212,191,0.08)!important;color:var(--text)!important}
+/* Selected/focused cell overrides — must beat Dash inline styles */
+td.dash-cell.focused,td.dash-cell.cell--selected.focused{background:rgba(45,212,191,0.15)!important;color:var(--text)!important;outline:1px solid var(--teal)!important;box-shadow:none!important;border-color:var(--teal)!important}
+td.dash-cell.cell--selected{background:rgba(45,212,191,0.08)!important;color:var(--text)!important}
+td.dash-cell.focused .dash-cell-value,td.dash-cell.cell--selected .dash-cell-value{color:var(--text)!important;background:transparent!important}
+input.dash-cell-value,div.dash-cell-value{color:var(--text)!important;background:transparent!important}
+/* Ensure all cell content is visible on hover/select */
+td.dash-cell:hover,td.dash-cell:hover .dash-cell-value{color:var(--text)!important}
+.dash-spreadsheet-inner td.dash-cell[style]{color:var(--text)!important}
 @media(max-width:1100px){.kpi-row{grid-template-columns:repeat(3,1fr)}.chart-row,.insight-row{grid-template-columns:1fr}.chart-half{grid-template-columns:1fr}.sidebar{display:none}}
 /* Drill-down panel */
 .drill-panel{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px;margin-top:14px}
