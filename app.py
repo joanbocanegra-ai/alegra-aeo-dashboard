@@ -14,12 +14,16 @@ def load_data():
     met = pd.read_sql("SELECT * FROM metricas", conn)
     mar = pd.read_sql("SELECT * FROM marcas", conn)
     dom = pd.read_sql("SELECT * FROM dominios", conn)
+    try:
+        resp = pd.read_sql("SELECT * FROM respuestas", conn)
+    except Exception:
+        resp = pd.DataFrame(columns=["batch_id","prompt_id","model_source","replicate_id","raw_response_text","raw_citations_json"])
     conn.close()
     dom["cite_count"] = pd.to_numeric(dom["cite_count"], errors="coerce").fillna(0).astype(int)
     dom["is_ecosystem"] = dom["is_ecosystem"].apply(lambda v: v in (1, True, "1"))
-    return met, mar, dom
+    return met, mar, dom, resp
 
-MET, MAR, DOM = load_data()
+MET, MAR, DOM, RESP = load_data()
 
 # ── Constants ─────────────────────────────────────────────────────────
 ML = {"chatgpt_search": "ChatGPT", "google_aio": "AI Overview"}
@@ -148,6 +152,18 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
 .domain-chip.eco{border-color:var(--teal);color:var(--teal)}
 .domain-chip.ext{border-color:var(--dim);color:var(--muted)}
 .domain-chip .chip-count{font-weight:700}
+/* Response viewer */
+.drill-response-section{margin-top:18px;padding-top:16px;border-top:1px solid var(--border)}
+.drill-response-title{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--dim);margin-bottom:10px}
+.drill-rep-tabs{display:flex;gap:6px;margin-bottom:12px}
+.drill-rep-tab{padding:5px 14px;border-radius:6px;font-size:10px;font-weight:600;cursor:pointer;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:Inter,sans-serif;transition:all .15s}
+.drill-rep-tab:hover{background:var(--surface);color:var(--text)}
+.drill-rep-tab.active{background:var(--teal);color:var(--bg);border-color:var(--teal)}
+.drill-response-box{background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:16px 18px;max-height:400px;overflow-y:auto;font-size:11px;line-height:1.7;color:var(--muted);white-space:pre-wrap;word-wrap:break-word}
+.drill-response-box::-webkit-scrollbar{width:6px}
+.drill-response-box::-webkit-scrollbar-track{background:var(--bg)}
+.drill-response-box::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+.drill-response-len{font-size:9px;color:var(--dim);margin-top:6px;text-align:right}
 </style></head><body>{%app_entry%}{%config%}{%scripts%}{%renderer%}</body></html>'''
 
 # ── Layout ────────────────────────────────────────────────────────────
@@ -823,9 +839,44 @@ def drill_open(active_cell, keys_data, pais, funnel, cat, motor):
             "Sin citas externas", style={"fontSize": "10px", "color": "var(--dim)"}),
     ])
 
+    # ── Response section ──────────────────────────────────────────────
+    resps = RESP[(RESP["prompt_id"] == prompt_id) & (RESP["model_source"] == model_source)].copy()
+    resps = resps.sort_values("replicate_id")
+
+    response_section = []
+    if not resps.empty:
+        tabs = []
+        for _, rr in resps.iterrows():
+            rep_id = int(rr["replicate_id"])
+            txt = rr["raw_response_text"] or ""
+            tabs.append(dcc.Tab(
+                label=f"Réplica {rep_id}",
+                value=f"rep-{rep_id}",
+                style={"backgroundColor": "var(--card)", "color": "var(--muted)",
+                       "border": "1px solid var(--border)", "borderRadius": "6px 6px 0 0",
+                       "padding": "6px 14px", "fontSize": "10px", "fontWeight": "600",
+                       "fontFamily": "Inter, sans-serif"},
+                selected_style={"backgroundColor": "var(--teal)", "color": "var(--bg)",
+                                "border": "1px solid var(--teal)", "borderRadius": "6px 6px 0 0",
+                                "padding": "6px 14px", "fontSize": "10px", "fontWeight": "600",
+                                "fontFamily": "Inter, sans-serif"},
+                children=[
+                    html.Div(className="drill-response-box", children=txt),
+                    html.Div(f"{len(txt):,} caracteres", className="drill-response-len"),
+                ],
+            ))
+
+        response_section = [html.Div(className="drill-response-section", children=[
+            html.Div(f"Respuesta Completa del Modelo — {motor_display}", className="drill-response-title"),
+            dcc.Tabs(tabs, value="rep-1",
+                     style={"height": "auto"},
+                     parent_style={"height": "auto"}),
+        ])]
+
     content = html.Div(children=[
         header,
         html.Div(className="drill-grid", children=[col1, col2, col3]),
+        *response_section,
     ])
 
     return content, {"display": "block"}
