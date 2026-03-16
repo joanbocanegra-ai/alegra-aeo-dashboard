@@ -70,7 +70,9 @@ app.index_string = '''<!DOCTYPE html>
 <html><head>{%metas%}<title>{%title%}</title>{%favicon%}{%css%}
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
-:root{--bg:#0B1120;--surface:#111827;--card:#1a2234;--border:#2a3550;--text:#F1F5F9;--muted:#94A3B8;--dim:#64748B;--teal:#2DD4BF;--blue:#60A5FA;--amber:#FBBF24;--green:#34D399;--red:#F87171;--orange:#FB923C;--purple:#A78BFA;--pink:#F472B6}
+:root{--bg:#0B1120;--surface:#111827;--card:#1a2234;--border:#2a3550;--text:#F1F5F9;--muted:#94A3B8;--dim:#64748B;--teal:#2DD4BF;--blue:#60A5FA;--amber:#FBBF24;--green:#34D399;--red:#F87171;--orange:#FB923C;--purple:#A78BFA;--pink:#F472B6;
+/* Override Dash system CSS variables for dark theme */
+--Dash-Fill-Inverse-Strong:#1a2234;--Dash-Fill-Interactive-Strong:#2DD4BF;--Dash-Fill-Interactive-Weak:rgba(45,212,191,0.08);--Dash-Text-Primary:#F1F5F9;--Dash-Text-Secondary:rgba(241,245,249,0.7);--Dash-Text-Weak:#94A3B8;--Dash-Stroke-Strong:#2a3550;--Dash-Stroke-Weak:rgba(42,53,80,0.5);--Dash-Fill-Primary-Hover:rgba(45,212,191,0.12);--Dash-Fill-Primary-Active:rgba(45,212,191,0.2);--Dash-Shading-Weak:rgba(0,0,0,0.3)}
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
 #react-entry-point{min-height:100vh}
@@ -129,17 +131,34 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
 .Select-option.is-focused{background:var(--surface)!important;color:var(--teal)!important}
 .Select-option.is-selected{background:var(--border)!important;color:var(--teal)!important;font-weight:600!important}
 /* ── Dash DataTable ── */
+/* Override Dash internal --hover variable (default #fdfdfd = near-white, causes invisible rows on dark theme) */
+.dash-spreadsheet-inner{--hover:rgba(45,212,191,0.10)!important}
+.dash-spreadsheet-inner tr{--hover:rgba(45,212,191,0.10)!important}
 .dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner th{background:var(--surface)!important;color:var(--muted)!important;border-bottom:2px solid var(--border)!important;font-size:9px!important;text-transform:uppercase;letter-spacing:.05em;font-weight:600}
 .dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner td{background:var(--card)!important;color:var(--text)!important;border-bottom:1px solid var(--border)!important;font-size:11px!important}
+.dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner tr:hover{background-color:rgba(45,212,191,0.08)!important}
 .dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner tr:hover td{background:rgba(45,212,191,0.08)!important;color:var(--text)!important}
 /* Selected/focused cell overrides — must beat Dash inline styles */
 td.dash-cell.focused,td.dash-cell.cell--selected.focused{background:rgba(45,212,191,0.15)!important;color:var(--text)!important;outline:1px solid var(--teal)!important;box-shadow:none!important;border-color:var(--teal)!important}
 td.dash-cell.cell--selected{background:rgba(45,212,191,0.08)!important;color:var(--text)!important}
 td.dash-cell.focused .dash-cell-value,td.dash-cell.cell--selected .dash-cell-value{color:var(--text)!important;background:transparent!important}
 input.dash-cell-value,div.dash-cell-value{color:var(--text)!important;background:transparent!important}
-/* Ensure all cell content is visible on hover/select */
-td.dash-cell:hover,td.dash-cell:hover .dash-cell-value{color:var(--text)!important}
+/* Ensure all cell content is visible in every state */
+td.dash-cell:hover,td.dash-cell:hover .dash-cell-value,
+td.dash-cell:focus,td.dash-cell:focus .dash-cell-value,
+td.dash-cell:focus-within,td.dash-cell:focus-within .dash-cell-value,
+td.dash-cell:active,td.dash-cell:active .dash-cell-value{color:var(--text)!important;background:transparent!important}
 .dash-spreadsheet-inner td.dash-cell[style]{color:var(--text)!important}
+/* Override Dash input-active state (cell enters edit mode on click) */
+.input-active.dash-cell-value,.dash-cell-value.focused,.dash-cell-value.unfocused{color:var(--text)!important;background:transparent!important;caret-color:var(--teal)!important}
+/* Nuclear override: any td anywhere in table must have readable text */
+.dash-spreadsheet-container td,.dash-spreadsheet-container td *,.dash-spreadsheet-container td div,.dash-spreadsheet-container td span,.dash-spreadsheet-container td input{color:var(--text)!important}
+.dash-spreadsheet-container td input::selection{background:var(--teal)!important;color:var(--bg)!important}
+/* Rows: full-row hover highlight — override TR *and* TD to prevent white bleed-through */
+.dash-spreadsheet-container tr:hover{background-color:rgba(45,212,191,0.06)!important}
+.dash-spreadsheet-container tr:hover td{background:rgba(45,212,191,0.06)!important}
+/* Kill Dash built-in :not(.cell--selected) tr:hover rule */
+.dash-spreadsheet-inner :not(.cell--selected) tr:hover{background-color:rgba(45,212,191,0.08)!important}
 @media(max-width:1100px){.kpi-row{grid-template-columns:repeat(3,1fr)}.chart-row,.insight-row{grid-template-columns:1fr}.chart-half{grid-template-columns:1fr}.sidebar{display:none}}
 /* Drill-down panel */
 .drill-panel{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px;margin-top:14px}
@@ -265,10 +284,20 @@ app.layout = html.Div(className="app-root", children=[
                               "borderBottom": "2px solid #2a3550"},
                 style_cell={"backgroundColor": "#1a2234", "color": "#F1F5F9", "border": "1px solid #2a3550",
                             "fontSize": "11px", "fontFamily": "Inter", "padding": "6px 8px", "textAlign": "left"},
-                style_data_conditional=[{
-                    "if": {"filter_query": '{is_alegra} eq 1'},
-                    "backgroundColor": "rgba(45,212,191,0.08)", "fontWeight": "600",
-                }],
+                style_data_conditional=[
+                    {"if": {"filter_query": '{is_alegra} eq 1'}, "backgroundColor": "rgba(45,212,191,0.08)", "fontWeight": "600"},
+                    {"if": {"state": "selected"}, "backgroundColor": "rgba(45,212,191,0.1)", "color": "#F1F5F9", "border": "1px solid #2DD4BF"},
+                    {"if": {"state": "active"}, "backgroundColor": "rgba(45,212,191,0.15)", "color": "#F1F5F9", "border": "1px solid #2DD4BF"},
+                ],
+                css=[{"selector": ".dash-spreadsheet-inner", "rule": "--hover: rgba(45,212,191,0.10) !important;"},
+                     {"selector": ".dash-spreadsheet-inner tr", "rule": "--hover: rgba(45,212,191,0.10) !important;"},
+                     {"selector": "tr:hover", "rule": "background-color: rgba(45,212,191,0.08) !important;"},
+                     {"selector": "tr:hover td", "rule": "background: rgba(45,212,191,0.08) !important; color: #F1F5F9 !important;"},
+                     {"selector": "td.dash-cell", "rule": "color: #F1F5F9 !important;"},
+                     {"selector": ".dash-cell-value", "rule": "color: inherit !important; background: transparent !important;"},
+                     {"selector": "td.focused", "rule": "background: rgba(45,212,191,0.15) !important; color: #F1F5F9 !important;"},
+                     {"selector": "td.cell--selected", "rule": "background: rgba(45,212,191,0.1) !important; color: #F1F5F9 !important;"},
+                ],
                 page_size=50, style_table={"overflowY": "auto", "maxHeight": "320px"},
             ),
         ]),
@@ -295,6 +324,19 @@ app.layout = html.Div(className="app-root", children=[
                               "borderBottom": "2px solid #2a3550"},
                 style_cell={"backgroundColor": "#1a2234", "color": "#F1F5F9", "border": "1px solid #2a3550",
                             "fontSize": "11px", "fontFamily": "Inter", "padding": "6px 8px", "textAlign": "left"},
+                style_data_conditional=[
+                    {"if": {"state": "selected"}, "backgroundColor": "rgba(45,212,191,0.1)", "color": "#F1F5F9", "border": "1px solid #2DD4BF"},
+                    {"if": {"state": "active"}, "backgroundColor": "rgba(45,212,191,0.15)", "color": "#F1F5F9", "border": "1px solid #2DD4BF"},
+                ],
+                css=[{"selector": ".dash-spreadsheet-inner", "rule": "--hover: rgba(45,212,191,0.10) !important;"},
+                     {"selector": ".dash-spreadsheet-inner tr", "rule": "--hover: rgba(45,212,191,0.10) !important;"},
+                     {"selector": "tr:hover", "rule": "background-color: rgba(45,212,191,0.08) !important;"},
+                     {"selector": "tr:hover td", "rule": "background: rgba(45,212,191,0.08) !important; color: #F1F5F9 !important;"},
+                     {"selector": "td.dash-cell", "rule": "color: #F1F5F9 !important;"},
+                     {"selector": ".dash-cell-value", "rule": "color: inherit !important; background: transparent !important;"},
+                     {"selector": "td.focused", "rule": "background: rgba(45,212,191,0.15) !important; color: #F1F5F9 !important; outline: 1px solid #2DD4BF !important;"},
+                     {"selector": "td.cell--selected", "rule": "background: rgba(45,212,191,0.1) !important; color: #F1F5F9 !important;"},
+                ],
                 page_size=50, style_table={"overflowY": "auto", "maxHeight": "320px"},
             ),
         ]),
