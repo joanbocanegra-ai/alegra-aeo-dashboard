@@ -456,6 +456,7 @@ def update_dashboard(pais, funnel, cat, motor):
     # ── KPIs ──────────────────────────────────────────────────────────
     avg_mr = fm["mention_rate"].mean()
     avg_cr = fm["citation_rate"].mean()
+    avg_cs = fm["consistency_score"].mean() if "consistency_score" in fm.columns else 0
     avg_rk = fm["avg_rank_alegra"].mean()
     eco_t = int(fm["eco_cites"].sum())
     tot_t = int(fm["total_cites"].sum())
@@ -475,11 +476,11 @@ def update_dashboard(pais, funnel, cat, motor):
     kpis = [
         kpi_card("Mention Rate", f"{round(avg_mr * 100)}%", "#2DD4BF", f"Promedio {n} combos"),
         kpi_card("Citation Rate", f"{round(avg_cr * 100)}%", "#60A5FA", "Marca citada como fuente"),
+        kpi_card("Consistency", f"{round(avg_cs)}%", "#FBBF24", "Estabilidad en réplicas"),
         kpi_card("Alegra Pos. Avg", f"#{avg_rk:.1f}", "#FB923C", "Rank ponderado Alegra"),
         kpi_card("Marca Líder", top_b["brand_name"] if top_b is not None else "\u2014", "#F472B6",
                  f"Pos. ponderada #{top_b['weighted_pos']:.1f}" if top_b is not None else ""),
         kpi_card("Eco Share", f"{round(eco_pct)}%", "#34D399", f"{eco_t}/{tot_t} citas ecosistema"),
-        kpi_card("Prompts", str(n_prompts), "#FBBF24", f"{n} prompt\u00d7motor"),
     ]
 
     # ── Chart 1: Mention & Citation by Motor ──────────────────────────
