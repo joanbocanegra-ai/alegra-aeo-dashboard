@@ -1,7 +1,7 @@
 import os, sqlite3, math
 import pandas as pd
 import plotly.graph_objects as go
-from dash import Dash, html, dcc, callback, Output, Input, dash_table
+from dash import Dash, html, dcc, callback, Output, Input, State, ctx, dash_table
 
 # ── DB ────────────────────────────────────────────────────────────────
 from init_db import init_db
@@ -59,7 +59,7 @@ def hex_to_rgba(h, a):
     return f"rgba({r},{g},{b},{a})"
 
 # ── App ───────────────────────────────────────────────────────────────
-app = Dash(__name__, title="Alegra AEO — Golden Stack")
+app = Dash(__name__, title="Alegra AEO — Golden Stack", suppress_callback_exceptions=True)
 server = app.server  # for deployment
 
 app.index_string = '''<!DOCTYPE html>
@@ -115,6 +115,39 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
 .dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner td{background:var(--card)!important;color:var(--text)!important;border-bottom:1px solid var(--border)!important;font-size:11px!important}
 .dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner tr:hover td{background:rgba(45,212,191,0.04)!important}
 @media(max-width:1100px){.kpi-row{grid-template-columns:repeat(3,1fr)}.chart-row,.insight-row{grid-template-columns:1fr}.chart-half{grid-template-columns:1fr}.sidebar{display:none}}
+/* Drill-down panel */
+.drill-panel{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px;margin-top:14px}
+.drill-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;padding-bottom:14px;border-bottom:1px solid var(--border)}
+.drill-header-left{flex:1}
+.drill-header-top{display:flex;align-items:center;gap:10px;margin-bottom:6px;flex-wrap:wrap}
+.drill-prompt-text{font-size:12px;color:var(--muted);line-height:1.5;margin-bottom:4px}
+.drill-meta{font-size:10px;color:var(--dim)}
+.drill-close{background:none;border:1px solid var(--border);color:var(--muted);padding:5px 14px;border-radius:6px;cursor:pointer;font-size:11px;font-family:Inter,sans-serif;white-space:nowrap}
+.drill-close:hover{background:var(--surface);color:var(--text)}
+.drill-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px}
+@media(max-width:1100px){.drill-grid{grid-template-columns:1fr}}
+.drill-col{min-width:0}
+.drill-col-title{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--dim);margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--border)}
+.drill-metric-row{display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid rgba(42,53,80,0.4)}
+.drill-metric-row:last-child{border-bottom:none}
+.drill-metric-label{font-size:11px;color:var(--muted)}
+.drill-metric-value{font-size:13px;font-weight:700;color:var(--teal)}
+.drill-brand-row{display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid rgba(42,53,80,0.4);font-size:11px}
+.drill-brand-row:last-child{border-bottom:none}
+.drill-brand-trophy{font-size:13px;width:18px;text-align:center;flex-shrink:0}
+.drill-brand-name{font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.drill-brand-rank{font-weight:700;color:var(--text);white-space:nowrap}
+.drill-brand-info{font-size:10px;color:var(--dim);white-space:nowrap}
+.drill-dom-header{display:flex;gap:16px;margin-bottom:10px;font-size:11px}
+.drill-dom-header-item{display:flex;flex-direction:column}
+.drill-dom-header-label{font-size:10px;color:var(--dim);font-weight:600;text-transform:uppercase;letter-spacing:.06em}
+.drill-dom-header-value{font-size:14px;font-weight:700}
+.drill-dom-section-title{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--dim);margin:10px 0 6px 0}
+.drill-dom-chips{display:flex;flex-wrap:wrap;gap:5px}
+.domain-chip{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:20px;font-size:10px;font-weight:500;background:rgba(26,34,52,0.8);border:1px solid var(--border)}
+.domain-chip.eco{border-color:var(--teal);color:var(--teal)}
+.domain-chip.ext{border-color:var(--dim);color:var(--muted)}
+.domain-chip .chip-count{font-weight:700}
 </style></head><body>{%app_entry%}{%config%}{%scripts%}{%renderer%}</body></html>'''
 
 # ── Layout ────────────────────────────────────────────────────────────
@@ -227,6 +260,8 @@ app.layout = html.Div(className="app-root", children=[
                 page_size=50, style_table={"overflowY": "auto", "maxHeight": "320px"},
             ),
         ]),
+        # Drill-down panel (hidden by default, shown on row click)
+        html.Div(id="drill-panel", style={"display": "none"}),
         # Domain maps
         html.Div("Mapa de Dominios Citados", className="section-label"),
         html.Div(className="chart-half", children=[
@@ -602,6 +637,178 @@ def update_dashboard(pais, funnel, cat, motor):
             fig_mr, fig_pos, fig_eco, fig_brands, leader_items, overall,
             brand_data, prompt_data, eco_title, fig_eco_doms, ext_title, fig_ext_doms,
             insights)
+
+
+# ── Drill-down callback ──────────────────────────────────────────────
+_ML_REV = {v: k for k, v in ML.items()}
+
+@callback(
+    Output("drill-panel", "children"),
+    Output("drill-panel", "style"),
+    Input("prompt-table", "active_cell"),
+    Input("drill-close-btn", "n_clicks"),
+    State("prompt-table", "data"),
+    State("f-pais", "value"),
+    State("f-funnel", "value"),
+    State("f-cat", "value"),
+    State("f-motor", "value"),
+    prevent_initial_call=True,
+)
+def drill_down(active_cell, close_clicks, table_data, pais, funnel, cat, motor):
+    hidden = {"display": "none"}
+
+    # Close button clicked
+    if ctx.triggered_id == "drill-close-btn":
+        return [], hidden
+
+    # No cell selected
+    if not active_cell or not table_data:
+        return [], hidden
+
+    row_idx = active_cell["row"]
+    if row_idx >= len(table_data):
+        return [], hidden
+
+    row = table_data[row_idx]
+    prompt_id = row.get("prompt_id", "")
+    motor_display = row.get("motor", "")
+    model_source = _ML_REV.get(motor_display, motor_display)
+
+    # Look up full metric row
+    met_row = MET[(MET["prompt_id"] == prompt_id) & (MET["model_source"] == model_source)]
+    if met_row.empty:
+        return [], hidden
+    m = met_row.iloc[0]
+
+    # Brand data for this prompt+motor
+    brands = MAR[(MAR["prompt_id"] == prompt_id) & (MAR["model_source"] == model_source)].copy()
+    brands = brands.sort_values("brand_rank_avg")
+
+    # Domain data for this prompt+motor
+    doms = DOM[(DOM["prompt_id"] == prompt_id) & (DOM["model_source"] == model_source)].copy()
+    eco_doms = doms[doms["is_ecosystem"]].sort_values("cite_count", ascending=False)
+    ext_doms = doms[~doms["is_ecosystem"]].sort_values("cite_count", ascending=False)
+
+    motor_color = MC.get(model_source, "#60A5FA")
+
+    # ── Header ────────────────────────────────────────────────────────
+    top_brand = m["top_brand"] if pd.notna(m.get("top_brand")) else "—"
+    top_brand_color = BC.get(top_brand, "#64748B")
+
+    header = html.Div(className="drill-header", children=[
+        html.Div(className="drill-header-left", children=[
+            html.Div(className="drill-header-top", children=[
+                html.Span(prompt_id, style={"fontWeight": "700", "fontSize": "14px"}),
+                html.Span(motor_display, style={
+                    "background": f"{motor_color}22", "color": motor_color,
+                    "padding": "3px 10px", "borderRadius": "6px",
+                    "fontSize": "10px", "fontWeight": "600",
+                }),
+                html.Span([
+                    "Marca líder: ",
+                    html.Span(top_brand, style={"color": top_brand_color, "fontWeight": "700"}),
+                ], style={"fontSize": "11px", "color": "var(--muted)"}),
+            ]),
+            html.Div(m.get("prompt_text", ""), className="drill-prompt-text"),
+            html.Div(
+                f"Funnel: {m.get('funnel_stage', '—')} · Cat: {m.get('product_category', '—')} · Producto: {m.get('source_producto_raw', '—')}",
+                className="drill-meta",
+            ),
+        ]),
+        html.Button("Cerrar", id="drill-close-btn", className="drill-close"),
+    ])
+
+    # ── Column 1: Métricas AEO ────────────────────────────────────────
+    def metric_row(label, value):
+        return html.Div(className="drill-metric-row", children=[
+            html.Span(label, className="drill-metric-label"),
+            html.Span(value, className="drill-metric-value"),
+        ])
+
+    avg_rank = m["avg_rank_alegra"]
+    avg_pos_pct = m.get("avg_pos_pct_alegra", 0)
+    avg_mentions = m.get("avg_brand_mentions", 0)
+
+    col1 = html.Div(className="drill-col", children=[
+        html.Div("Métricas AEO", className="drill-col-title"),
+        metric_row("Mention Rate", f"{m['mention_rate']:.0%}"),
+        metric_row("Citation Rate", f"{m['citation_rate']:.0%}"),
+        metric_row("Consistency Score", f"{m['consistency_score']:.0f}"),
+        metric_row("Posición promedio", f"#{avg_rank:.1f}"),
+        metric_row("Posición % texto", f"{avg_pos_pct:.1f}%"),
+        metric_row("Menciones promedio", f"{avg_mentions}"),
+    ])
+
+    # ── Column 2: Ranking de Marcas ───────────────────────────────────
+    brand_rows = []
+    for i, (_, b) in enumerate(brands.iterrows()):
+        trophy = "🏆" if i < 3 else ""
+        bname = b["brand_name"]
+        bcolor = BC.get(bname, "#64748B")
+        rank_val = b["brand_rank_avg"]
+        presence = b.get("brand_presence_pct", 0)
+        mentions = b.get("brand_mentions_total", 0)
+
+        brand_rows.append(html.Div(className="drill-brand-row", children=[
+            html.Span(trophy, className="drill-brand-trophy"),
+            html.Span(bname, className="drill-brand-name", style={"color": bcolor}),
+            html.Span(f"#{rank_val:.1f}", className="drill-brand-rank"),
+            html.Span(f"({mentions} mencs, {presence}%)", className="drill-brand-info"),
+        ]))
+
+    col2 = html.Div(className="drill-col", children=[
+        html.Div(f"Ranking de Marcas ({len(brands)})", className="drill-col-title"),
+        *brand_rows,
+    ])
+
+    # ── Column 3: Dominios Citados ────────────────────────────────────
+    eco_count = int(eco_doms["cite_count"].sum()) if not eco_doms.empty else 0
+    ext_count = int(ext_doms["cite_count"].sum()) if not ext_doms.empty else 0
+    total_cites = eco_count + ext_count
+    eco_pct = f"{eco_count / total_cites * 100:.0f}%" if total_cites > 0 else "0%"
+
+    eco_chips = []
+    for _, d in eco_doms.iterrows():
+        eco_chips.append(html.Span(className="domain-chip eco", children=[
+            html.Span(d["domain"]),
+            html.Span(f"×{int(d['cite_count'])}", className="chip-count"),
+        ]))
+
+    ext_chips = []
+    for _, d in ext_doms.head(10).iterrows():
+        ext_chips.append(html.Span(className="domain-chip ext", children=[
+            html.Span(d["domain"]),
+            html.Span(f"×{int(d['cite_count'])}", className="chip-count"),
+        ]))
+
+    col3 = html.Div(className="drill-col", children=[
+        html.Div(f"Dominios Citados ({eco_count + ext_count})", className="drill-col-title"),
+        html.Div(className="drill-dom-header", children=[
+            html.Div(className="drill-dom-header-item", children=[
+                html.Span("Ecosistema", className="drill-dom-header-label"),
+                html.Span(f"{eco_count} ({eco_pct})", className="drill-dom-header-value",
+                          style={"color": "var(--teal)"}),
+            ]),
+            html.Div(className="drill-dom-header-item", children=[
+                html.Span("Externos", className="drill-dom-header-label"),
+                html.Span(str(ext_count), className="drill-dom-header-value",
+                          style={"color": "var(--muted)"}),
+            ]),
+        ]),
+        html.Div("ECOSISTEMA", className="drill-dom-section-title"),
+        html.Div(className="drill-dom-chips", children=eco_chips) if eco_chips else html.Div(
+            "Sin citas ecosistema", style={"fontSize": "10px", "color": "var(--dim)"}),
+        html.Div("EXTERNOS TOP", className="drill-dom-section-title"),
+        html.Div(className="drill-dom-chips", children=ext_chips) if ext_chips else html.Div(
+            "Sin citas externas", style={"fontSize": "10px", "color": "var(--dim)"}),
+    ])
+
+    panel = html.Div(className="drill-panel", children=[
+        header,
+        html.Div(className="drill-grid", children=[col1, col2, col3]),
+    ])
+
+    return panel, {"display": "block"}
 
 
 if __name__ == "__main__":
