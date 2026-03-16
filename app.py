@@ -260,6 +260,8 @@ app.layout = html.Div(className="app-root", children=[
                 page_size=50, style_table={"overflowY": "auto", "maxHeight": "320px"},
             ),
         ]),
+        # Store for prompt-table row keys (survives callback timing issues)
+        dcc.Store(id="prompt-table-keys", data=[]),
         # Drill-down panel (hidden by default, shown on row click)
         html.Div(id="drill-panel", style={"display": "none"}),
         # Domain maps
@@ -306,6 +308,7 @@ app.layout = html.Div(className="app-root", children=[
     Output("ext-dom-title", "children"),
     Output("chart-ext-doms", "figure"),
     Output("insight-row", "children"),
+    Output("prompt-table-keys", "data"),
     Input("f-pais", "value"),
     Input("f-funnel", "value"),
     Input("f-cat", "value"),
@@ -342,7 +345,7 @@ def update_dashboard(pais, funnel, cat, motor):
         empty = "Sin datos para los filtros seleccionados."
         return (empty, [], f"Batch: {batch}", f"Batch {batch}", [],
                 empty_fig, empty_fig, empty_fig, empty_fig, [], [],
-                [], [], "", empty_fig, "", empty_fig, [])
+                [], [], "", empty_fig, "", empty_fig, [], [])
 
     # ── Header ────────────────────────────────────────────────────────
     header_sub = f"Dashboard MVP \u00b7 Batch {batch} \u00b7 {n} prompt\u00d7motor"
@@ -633,10 +636,13 @@ def update_dashboard(pais, funnel, cat, motor):
         ]),
     ]
 
+    # Build row-key list for drill-down (prompt_id|model_source for each row)
+    prompt_keys = [{"prompt_id": r["prompt_id"], "model_source": r["model_source"]} for _, r in fm.iterrows()]
+
     return (header_sub, header_badges, sidebar_info, footer_batch, kpis,
             fig_mr, fig_pos, fig_eco, fig_brands, leader_items, overall,
             brand_data, prompt_data, eco_title, fig_eco_doms, ext_title, fig_ext_doms,
-            insights)
+            insights, prompt_keys)
 
 
 # ── Drill-down callback ──────────────────────────────────────────────
@@ -647,32 +653,27 @@ _ML_REV = {v: k for k, v in ML.items()}
     Output("drill-panel", "style"),
     Input("prompt-table", "active_cell"),
     Input("drill-close-btn", "n_clicks"),
-    State("prompt-table", "data"),
-    State("f-pais", "value"),
-    State("f-funnel", "value"),
-    State("f-cat", "value"),
-    State("f-motor", "value"),
+    State("prompt-table-keys", "data"),
     prevent_initial_call=True,
 )
-def drill_down(active_cell, close_clicks, table_data, pais, funnel, cat, motor):
+def drill_down(active_cell, close_clicks, keys_data):
     hidden = {"display": "none"}
 
     # Close button clicked
     if ctx.triggered_id == "drill-close-btn":
         return [], hidden
 
-    # No cell selected
-    if not active_cell or not table_data:
+    # No cell selected or no keys
+    if not active_cell or not keys_data:
         return [], hidden
 
     row_idx = active_cell["row"]
-    if row_idx >= len(table_data):
+    if row_idx >= len(keys_data):
         return [], hidden
 
-    row = table_data[row_idx]
-    prompt_id = row.get("prompt_id", "")
-    motor_display = row.get("motor", "")
-    model_source = _ML_REV.get(motor_display, motor_display)
+    key = keys_data[row_idx]
+    prompt_id = key.get("prompt_id", "")
+    model_source = key.get("model_source", "")
 
     # Look up full metric row
     met_row = MET[(MET["prompt_id"] == prompt_id) & (MET["model_source"] == model_source)]
@@ -689,6 +690,7 @@ def drill_down(active_cell, close_clicks, table_data, pais, funnel, cat, motor):
     eco_doms = doms[doms["is_ecosystem"]].sort_values("cite_count", ascending=False)
     ext_doms = doms[~doms["is_ecosystem"]].sort_values("cite_count", ascending=False)
 
+    motor_display = ML.get(model_source, model_source)
     motor_color = MC.get(model_source, "#60A5FA")
 
     # ── Header ────────────────────────────────────────────────────────
