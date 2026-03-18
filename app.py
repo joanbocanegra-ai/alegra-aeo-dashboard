@@ -734,8 +734,8 @@ def update_dashboard(pais, funnel, cat, motor):
         html.Div(className="insight-box", children=[
             html.Div("Marca líder por segmento", className="insight-title", style={"color": "#F472B6"}),
             html.Div(className="insight-body", children=[
-                f"Branded: {', '.join(branded_leaders)} lidera(n). " if branded_leaders else "",
-                f"Genérico: {', '.join(generic_leaders)} lidera(n). " if generic_leaders else "",
+                f"Branded: {', '.join(str(x) for x in branded_leaders if pd.notna(x))} lidera(n). " if branded_leaders else "",
+                f"Genérico: {', '.join(str(x) for x in generic_leaders if pd.notna(x))} lidera(n). " if generic_leaders else "",
                 "CONTPAQi domina los prompts genéricos BOFU en AI Overview. Alegra necesita estrategia para escalar posición orgánica.",
             ]),
         ]),
