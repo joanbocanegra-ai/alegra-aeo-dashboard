@@ -49,7 +49,15 @@ def load_data():
     dom["is_ecosystem"] = dom["is_ecosystem"].apply(lambda v: v in (1, True, "1"))
     return met, mar, dom, resp
 
-MET, MAR, DOM, RESP = load_data()
+_data_cache = {}
+def get_data():
+    if not _data_cache:
+        met, mar, dom, resp = load_data()
+        _data_cache['MET'] = met
+        _data_cache['MAR'] = mar
+        _data_cache['DOM'] = dom
+        _data_cache['RESP'] = resp
+    return _data_cache['MET'], _data_cache['MAR'], _data_cache['DOM'], _data_cache['RESP']
 
 # ── Constants ─────────────────────────────────────────────────────────
 ML = {"chatgpt_search": "ChatGPT", "google_aio": "AI Overview"}
@@ -106,6 +114,10 @@ def hex_to_rgba(h, a):
 # ── App ───────────────────────────────────────────────────────────────
 app = Dash(__name__, title="Alegra AEO — Golden Stack", suppress_callback_exceptions=True)
 server = app.server  # for deployment
+
+@server.route("/healthz")
+def healthz():
+    return "ok", 200
 
 app.index_string = '''<!DOCTYPE html>
 <html><head>{%metas%}<title>{%title%}</title>{%favicon%}{%css%}
@@ -249,7 +261,9 @@ td.dash-cell:active,td.dash-cell:active .dash-cell-value{color:var(--text)!impor
 </style></head><body>{%app_entry%}{%config%}{%scripts%}{%renderer%}</body></html>'''
 
 # ── Layout ────────────────────────────────────────────────────────────
-app.layout = html.Div(className="app-root", children=[
+def serve_layout():
+    MET, MAR, DOM, RESP = get_data()
+    return html.Div(className="app-root", children=[
     html.Aside(className="sidebar", children=[
         html.Div("\U0001f4ca Alegra AEO", className="sidebar-title"),
         html.Div("Golden Stack Dashboard", className="sidebar-sub"),
@@ -417,7 +431,9 @@ app.layout = html.Div(className="app-root", children=[
             html.A("Created with Perplexity Computer", href="https://www.perplexity.ai/computer", target="_blank"),
         ]),
     ]),
-])
+    ])
+
+app.layout = serve_layout
 
 # ── Callback ──────────────────────────────────────────────────────────
 @callback(
@@ -447,6 +463,7 @@ app.layout = html.Div(className="app-root", children=[
     Input("f-batch", "value"),
 )
 def update_dashboard(pais, funnel, cat, motor, batch):
+    MET, MAR, DOM, RESP = get_data()
     # Resolver batch efectivo: si no seleccionan uno, usar el más reciente
     latest_batch = None
     if "batch_id" in MET.columns and len(MET):
@@ -816,6 +833,7 @@ _ML_REV = {v: k for k, v in ML.items()}
     prevent_initial_call=True,
 )
 def drill_open(active_cell, keys_data, pais, funnel, cat, motor, batch):
+    MET, MAR, DOM, RESP = get_data()
     hidden = {"display": "none"}
 
     if not active_cell:
