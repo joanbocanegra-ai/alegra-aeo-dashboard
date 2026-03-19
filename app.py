@@ -76,6 +76,21 @@ def make_options(series, label_map=None):
         opts.append({"label": (label_map or {}).get(v, v), "value": v})
     return opts
 
+def make_batch_options(met):
+    from datetime import datetime
+    opts = [{"label": "Último batch", "value": ""}]
+    if "batch_id" not in met.columns or len(met) == 0:
+        return opts
+    batches = sorted(met["batch_id"].dropna().unique(), reverse=True)
+    for b in batches:
+        try:
+            dt = datetime.strptime(b[:15], "%Y%m%dT%H%M%S")
+            label = dt.strftime("%b %d, %Y %H:%M")
+        except Exception:
+            label = b
+        opts.append({"label": label, "value": b})
+    return opts
+
 def kpi_card(label, value, color, sub):
     return html.Div(className="kpi-card", children=[
         html.Div(label, className="kpi-label"),
@@ -259,6 +274,11 @@ app.layout = html.Div(className="app-root", children=[
             dcc.Dropdown(id="f-motor", options=make_options(MET["model_source"], ML),
                          value="", clearable=False, searchable=False),
         ]),
+        html.Div(className="filter-group", children=[
+            html.Div("Batch", className="filter-label"),
+            dcc.Dropdown(id="f-batch", options=make_batch_options(MET),
+                         value="", clearable=False, searchable=False),
+        ]),
         html.Hr(className="sidebar-divider"),
         html.Div(id="sidebar-info", className="sidebar-info"),
     ]),
@@ -424,8 +444,16 @@ app.layout = html.Div(className="app-root", children=[
     Input("f-funnel", "value"),
     Input("f-cat", "value"),
     Input("f-motor", "value"),
+    Input("f-batch", "value"),
 )
-def update_dashboard(pais, funnel, cat, motor):
+def update_dashboard(pais, funnel, cat, motor, batch):
+    # Resolver batch efectivo: si no seleccionan uno, usar el más reciente
+    latest_batch = None
+    if "batch_id" in MET.columns and len(MET):
+        latest_batch = sorted(MET["batch_id"].dropna().unique(), reverse=True)[0]
+
+    effective_batch = batch or latest_batch
+
     # ── Filter ────────────────────────────────────────────────────────
     fm = MET.copy()
     fb = MAR.copy()
@@ -441,12 +469,20 @@ def update_dashboard(pais, funnel, cat, motor):
     if motor:
         fm = fm[fm["model_source"] == motor]
         fb = fb[fb["model_source"] == motor]
+    if effective_batch:
+        fm = fm[fm["batch_id"] == effective_batch]
+        fb = fb[fb["batch_id"] == effective_batch]
 
-    # Filter dominios by keys present in filtered metricas
+    # Filter dominios by batch first, then by keys present in filtered metricas
+    fd_base = DOM[DOM["batch_id"] == effective_batch] if effective_batch else DOM.copy()
     keys = set(fm["prompt_id"] + "|" + fm["model_source"])
-    fd = DOM[DOM.apply(lambda r: f"{r['prompt_id']}|{r['model_source']}" in keys, axis=1)]
+    fd = fd_base[fd_base.apply(lambda r: f"{r['prompt_id']}|{r['model_source']}" in keys, axis=1)]
 
-    batch = MET.iloc[0]["batch_date"] if len(MET) else "—"
+    batch_display = (
+        fm.iloc[0]["batch_date"]
+        if len(fm) and "batch_date" in fm.columns
+        else (effective_batch or "—")
+    )
     n = len(fm)
     empty_fig = go.Figure().update_layout(
         paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
@@ -454,12 +490,12 @@ def update_dashboard(pais, funnel, cat, motor):
 
     if n == 0:
         empty = "Sin datos para los filtros seleccionados."
-        return (empty, [], f"Batch: {batch}", f"Batch {batch}", [],
+        return (empty, [], f"Batch: {batch_display}", f"Batch {batch_display}", [],
                 empty_fig, empty_fig, empty_fig, empty_fig, [], [],
                 [], [], "", empty_fig, "", empty_fig, [], [])
 
     # ── Header ────────────────────────────────────────────────────────
-    header_sub = f"Dashboard MVP \u00b7 Batch {batch} \u00b7 {n} prompt\u00d7motor"
+    header_sub = f"Dashboard MVP \u00b7 Batch {batch_display} \u00b7 {n} prompt\u00d7motor"
     t_ok = int(fm["num_success"].sum())
     t_r = int(fm["num_replicates"].sum())
     header_badges = [
@@ -468,8 +504,8 @@ def update_dashboard(pais, funnel, cat, motor):
         html.Span("MX", className="badge",
                   style={"background": "#60A5FA22", "color": "#60A5FA"}),
     ]
-    sidebar_info = f"Batch: {batch}\nArquitectura Dual"
-    footer_batch = f"Batch {batch}"
+    sidebar_info = f"Batch: {batch_display}\nArquitectura Dual"
+    footer_batch = f"Batch {batch_display}"
 
     # ── KPIs ──────────────────────────────────────────────────────────
     avg_mr = fm["mention_rate"].mean()
@@ -748,8 +784,15 @@ def update_dashboard(pais, funnel, cat, motor):
         ]),
     ]
 
-    # Build row-key list for drill-down (prompt_id|model_source for each row)
-    prompt_keys = [{"prompt_id": r["prompt_id"], "model_source": r["model_source"]} for _, r in fm.iterrows()]
+    # Build row-key list for drill-down (includes batch_id to avoid cross-batch mixing)
+    prompt_keys = [
+        {
+            "prompt_id": r["prompt_id"],
+            "model_source": r["model_source"],
+            "batch_id": r.get("batch_id", None),
+        }
+        for _, r in fm.iterrows()
+    ]
 
     return (header_sub, header_badges, sidebar_info, footer_batch, kpis,
             fig_mr, fig_pos, fig_eco, fig_brands, leader_items, overall,
@@ -769,9 +812,10 @@ _ML_REV = {v: k for k, v in ML.items()}
     State("f-funnel", "value"),
     State("f-cat", "value"),
     State("f-motor", "value"),
+    State("f-batch", "value"),
     prevent_initial_call=True,
 )
-def drill_open(active_cell, keys_data, pais, funnel, cat, motor):
+def drill_open(active_cell, keys_data, pais, funnel, cat, motor, batch):
     hidden = {"display": "none"}
 
     if not active_cell:
@@ -779,13 +823,19 @@ def drill_open(active_cell, keys_data, pais, funnel, cat, motor):
 
     row_idx = active_cell["row"]
 
-    # Try keys_data first (populated by dcc.Store)
+    # Try keys_data first (populated by dcc.Store — includes batch_id)
     if keys_data and row_idx < len(keys_data):
         key = keys_data[row_idx]
         prompt_id = key.get("prompt_id", "")
         model_source = key.get("model_source", "")
+        row_batch = key.get("batch_id", None)
     else:
         # Fallback: reconstruct row order from current filters
+        latest_batch = None
+        if "batch_id" in MET.columns and len(MET):
+            latest_batch = sorted(MET["batch_id"].dropna().unique(), reverse=True)[0]
+        row_batch = batch or latest_batch
+
         fm = MET.copy()
         if pais:
             fm = fm[fm["country_id"] == pais]
@@ -795,24 +845,32 @@ def drill_open(active_cell, keys_data, pais, funnel, cat, motor):
             fm = fm[fm["product_category"] == cat]
         if motor:
             fm = fm[fm["model_source"] == motor]
+        if row_batch:
+            fm = fm[fm["batch_id"] == row_batch]
         if row_idx >= len(fm):
             return [], hidden
         row = fm.iloc[row_idx]
         prompt_id = row["prompt_id"]
         model_source = row["model_source"]
+        row_batch = row.get("batch_id", None)
 
-    # Look up full metric row
-    met_row = MET[(MET["prompt_id"] == prompt_id) & (MET["model_source"] == model_source)]
+    effective_batch = row_batch or batch
+
+    # Look up full metric row — filter by effective_batch to avoid cross-batch mixing
+    met_base = MET[MET["batch_id"] == effective_batch] if effective_batch else MET
+    met_row = met_base[(met_base["prompt_id"] == prompt_id) & (met_base["model_source"] == model_source)]
     if met_row.empty:
         return [], hidden
     m = met_row.iloc[0]
 
     # Brand data for this prompt+motor
-    brands = MAR[(MAR["prompt_id"] == prompt_id) & (MAR["model_source"] == model_source)].copy()
+    mar_base = MAR[MAR["batch_id"] == effective_batch] if effective_batch else MAR
+    brands = mar_base[(mar_base["prompt_id"] == prompt_id) & (mar_base["model_source"] == model_source)].copy()
     brands = brands.sort_values("brand_rank_avg")
 
     # Domain data for this prompt+motor
-    doms = DOM[(DOM["prompt_id"] == prompt_id) & (DOM["model_source"] == model_source)].copy()
+    dom_base = DOM[DOM["batch_id"] == effective_batch] if effective_batch else DOM
+    doms = dom_base[(dom_base["prompt_id"] == prompt_id) & (dom_base["model_source"] == model_source)].copy()
     eco_doms = doms[doms["is_ecosystem"]].sort_values("cite_count", ascending=False)
     ext_doms = doms[~doms["is_ecosystem"]].sort_values("cite_count", ascending=False)
 
@@ -931,7 +989,11 @@ def drill_open(active_cell, keys_data, pais, funnel, cat, motor):
     ])
 
     # ── Response section ──────────────────────────────────────────────
-    resps = RESP[(RESP["prompt_id"] == prompt_id) & (RESP["model_source"] == model_source)].copy()
+    resp_base = RESP[RESP["batch_id"] == effective_batch] if effective_batch else RESP
+    resps = resp_base[
+        (resp_base["prompt_id"] == prompt_id) &
+        (resp_base["model_source"] == model_source)
+    ].copy()
     resps = resps.sort_values("replicate_id")
 
     response_section = []
