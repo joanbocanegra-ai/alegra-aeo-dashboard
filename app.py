@@ -23,40 +23,49 @@ def _get_engine():
     return _pg_engine
 
 def load_data():
-    if DATABASE_URL:
-        engine = _get_engine()
-        with engine.connect() as conn:
+    _empty_resp = pd.DataFrame(columns=["batch_id","prompt_id","model_source","replicate_id","raw_response_text","raw_citations_json"])
+    try:
+        if DATABASE_URL:
+            engine = _get_engine()
+            with engine.connect() as conn:
+                met = pd.read_sql("SELECT * FROM metricas", conn)
+                mar = pd.read_sql("SELECT * FROM marcas", conn)
+                dom = pd.read_sql("SELECT * FROM dominios", conn)
+                try:
+                    resp = pd.read_sql("SELECT * FROM respuestas", conn)
+                except Exception:
+                    resp = _empty_resp
+        else:
+            from init_db import init_db
+            init_db()
+            conn = sqlite3.connect(os.path.join(os.path.dirname(__file__), "aeo_data.db"))
             met = pd.read_sql("SELECT * FROM metricas", conn)
             mar = pd.read_sql("SELECT * FROM marcas", conn)
             dom = pd.read_sql("SELECT * FROM dominios", conn)
             try:
                 resp = pd.read_sql("SELECT * FROM respuestas", conn)
             except Exception:
-                resp = pd.DataFrame(columns=["batch_id","prompt_id","model_source","replicate_id","raw_response_text","raw_citations_json"])
-    else:
-        from init_db import init_db
-        init_db()
-        conn = sqlite3.connect(os.path.join(os.path.dirname(__file__), "aeo_data.db"))
-        met = pd.read_sql("SELECT * FROM metricas", conn)
-        mar = pd.read_sql("SELECT * FROM marcas", conn)
-        dom = pd.read_sql("SELECT * FROM dominios", conn)
-        try:
-            resp = pd.read_sql("SELECT * FROM respuestas", conn)
-        except Exception:
-            resp = pd.DataFrame(columns=["batch_id","prompt_id","model_source","replicate_id","raw_response_text","raw_citations_json"])
-        conn.close()
-    dom["cite_count"] = pd.to_numeric(dom["cite_count"], errors="coerce").fillna(0).astype(int)
-    dom["is_ecosystem"] = dom["is_ecosystem"].apply(lambda v: v in (1, True, "1"))
-    return met, mar, dom, resp
+                resp = _empty_resp
+            conn.close()
+        dom["cite_count"] = pd.to_numeric(dom["cite_count"], errors="coerce").fillna(0).astype(int)
+        dom["is_ecosystem"] = dom["is_ecosystem"].apply(lambda v: v in (1, True, "1"))
+        return met, mar, dom, resp
+    except Exception as e:
+        print(f"[load_data] ERROR conectando a DB: {e}")
+        return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), _empty_resp
 
 _data_cache = {}
 def get_data():
     if not _data_cache:
         met, mar, dom, resp = load_data()
-        _data_cache['MET'] = met
-        _data_cache['MAR'] = mar
-        _data_cache['DOM'] = dom
+        if met.empty:
+            # No cachear estado de error → próximo request reintentará automáticamente
+            return met, mar, dom, resp
+        _data_cache['MET']  = met
+        _data_cache['MAR']  = mar
+        _data_cache['DOM']  = dom
         _data_cache['RESP'] = resp
+        _data_cache['ok']   = True
     return _data_cache['MET'], _data_cache['MAR'], _data_cache['DOM'], _data_cache['RESP']
 
 # ── Constants ─────────────────────────────────────────────────────────
@@ -117,7 +126,9 @@ server = app.server  # for deployment
 
 @server.route("/healthz")
 def healthz():
-    return "ok", 200
+    if _data_cache and not _data_cache.get('ok', True):
+        return {"status": "db_error"}, 503
+    return {"status": "ok"}, 200
 
 app.index_string = '''<!DOCTYPE html>
 <html><head>{%metas%}<title>{%title%}</title>{%favicon%}{%css%}
@@ -263,7 +274,17 @@ td.dash-cell:active,td.dash-cell:active .dash-cell-value{color:var(--text)!impor
 # ── Layout ────────────────────────────────────────────────────────────
 def serve_layout():
     MET, MAR, DOM, RESP = get_data()
+    db_ok = not MET.empty
+    error_banner = html.Div(
+        "⚠️  No se pudo conectar a la base de datos. Recarga la página en unos segundos para reintentar.",
+        style={
+            "background": "#7f1d1d", "color": "#fca5a5", "padding": "10px 20px",
+            "textAlign": "center", "fontSize": "12px", "fontWeight": "600",
+            "borderBottom": "1px solid #991b1b", "letterSpacing": ".02em"
+        }
+    ) if not db_ok else None
     return html.Div(className="app-root", children=[
+    error_banner,
     html.Aside(className="sidebar", children=[
         html.Div("\U0001f4ca Alegra AEO", className="sidebar-title"),
         html.Div("Golden Stack Dashboard", className="sidebar-sub"),
@@ -1065,3 +1086,4 @@ def drill_close(n):
 
 if __name__ == "__main__":
     app.run(debug=False, host="0.0.0.0", port=int(os.environ.get("PORT", 8050)))
+
