@@ -562,8 +562,14 @@ def update_dashboard(pais, funnel, cat, motor, batch):
         mentions=("brand_mentions_total", "sum"),
     ).reset_index()
     b_agg["weighted_pos"] = b_agg["rank_sum"] / b_agg["count"]
-    b_agg = b_agg.sort_values("weighted_pos")
-    top_b = b_agg.iloc[0] if len(b_agg) else None
+    b_agg = b_agg.sort_values(["weighted_pos", "mentions"], ascending=[True, False])
+
+    # KPI "Marca Líder" — umbral mínimo de presencia (10% de prompts, mínimo 5)
+    # Solo aplica al headline; b_agg completo sigue disponible para gráficos y tablas
+    _min_count = max(5, math.ceil(n_prompts * 0.10))
+    _eligible  = b_agg[b_agg["count"] >= _min_count]
+    _eligible  = _eligible if len(_eligible) else b_agg   # fallback: todos
+    top_b = _eligible.iloc[0] if len(_eligible) else None
 
     kpis = [
         kpi_card("Mention Rate", f"{round(avg_mr * 100)}%", "#2DD4BF", f"Promedio {n} combos"),
@@ -693,10 +699,10 @@ def update_dashboard(pais, funnel, cat, motor, batch):
             ]),
         ]))
 
-    # Overall leader
+    # Overall leader — usa el mismo top_b con umbral de elegibilidad
     overall = []
-    if len(b_agg):
-        ldr = b_agg.iloc[0]
+    if top_b is not None:
+        ldr = top_b
         lc = BC.get(ldr["brand_name"], "#64748B")
         overall = [html.Div(className="overall-leader", children=[
             html.Div("Marca Líder Ponderada (Todos los filtros)",
@@ -1086,4 +1092,5 @@ def drill_close(n):
 
 if __name__ == "__main__":
     app.run(debug=False, host="0.0.0.0", port=int(os.environ.get("PORT", 8050)))
+
 
