@@ -564,7 +564,10 @@ def update_dashboard(pais, funnel, cat, motor, batch):
     b_agg["weighted_pos"]  = b_agg["rank_sum"] / b_agg["count"]
     n_combos               = len(fm)
     b_agg["coverage_pct"]  = (b_agg["count"] / n_combos * 100).round(1)
-    b_agg = b_agg.sort_values(["weighted_pos", "mentions"], ascending=[True, False])
+    b_agg = b_agg.sort_values(
+        ["weighted_pos", "coverage_pct", "mentions"],
+        ascending=[True, False, False]
+    )
 
     # KPI "Marca Líder" — umbral mínimo de presencia (10% de prompts, mínimo 5)
     # Solo aplica al headline; b_agg completo sigue disponible para gráficos y tablas
@@ -660,12 +663,23 @@ def update_dashboard(pais, funnel, cat, motor, batch):
 
     # ── Chart 4: Brand ranking ────────────────────────────────────────
     max_pos = b_agg["weighted_pos"].max() if len(b_agg) else 1
+
+    # Opacidad: presencia >= 15% → 1.0 | < 15% → 0.35
+    def _bar_color(row):
+        base = BC.get(row["brand_name"], "#64748B")
+        opacity = 1.0 if row["coverage_pct"] >= 15 else 0.35
+        h = base.lstrip("#")
+        r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+        return f"rgba({r},{g},{b},{opacity})"
+
+    bar_colors = b_agg.apply(_bar_color, axis=1).tolist()
+
     fig_brands = go.Figure(go.Bar(
         orientation="h",
         y=b_agg["brand_name"], x=b_agg["weighted_pos"],
-        marker_color=b_agg["brand_name"].map(lambda b: BC.get(b, "#64748B")).tolist(),
+        marker_color=bar_colors,
         text=b_agg.apply(
-            lambda r: f"#{r['weighted_pos']:.1f}  {r['coverage_pct']:.0f}% presencia", axis=1
+            lambda r: f"#{r['weighted_pos']:.1f} · {r['coverage_pct']:.0f}% presencia", axis=1
         ),
         textposition="outside", textfont=dict(size=11, color="#94A3B8"),
         customdata=b_agg[["coverage_pct", "count", "mentions"]].values,
@@ -1103,4 +1117,3 @@ def drill_close(n):
 
 if __name__ == "__main__":
     app.run(debug=False, host="0.0.0.0", port=int(os.environ.get("PORT", 8050)))
-
