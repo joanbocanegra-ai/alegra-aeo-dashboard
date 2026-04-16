@@ -561,7 +561,9 @@ def update_dashboard(pais, funnel, cat, motor, batch):
         count=("brand_rank_avg", "count"),
         mentions=("brand_mentions_total", "sum"),
     ).reset_index()
-    b_agg["weighted_pos"] = b_agg["rank_sum"] / b_agg["count"]
+    b_agg["weighted_pos"]  = b_agg["rank_sum"] / b_agg["count"]
+    n_combos               = len(fm)
+    b_agg["coverage_pct"]  = (b_agg["count"] / n_combos * 100).round(1)
     b_agg = b_agg.sort_values(["weighted_pos", "mentions"], ascending=[True, False])
 
     # KPI "Marca Líder" — umbral mínimo de presencia (10% de prompts, mínimo 5)
@@ -662,16 +664,25 @@ def update_dashboard(pais, funnel, cat, motor, batch):
         orientation="h",
         y=b_agg["brand_name"], x=b_agg["weighted_pos"],
         marker_color=b_agg["brand_name"].map(lambda b: BC.get(b, "#64748B")).tolist(),
-        text=b_agg["weighted_pos"].apply(lambda v: f"#{v:.1f}"),
-        textposition="outside", textfont=dict(size=12, color="#F1F5F9"),
+        text=b_agg.apply(
+            lambda r: f"#{r['weighted_pos']:.1f}  {r['coverage_pct']:.0f}% presencia", axis=1
+        ),
+        textposition="outside", textfont=dict(size=11, color="#94A3B8"),
+        customdata=b_agg[["coverage_pct", "count", "mentions"]].values,
+        hovertemplate=(
+            "<b>%{y}</b><br>"
+            "Posición promedio: #%{x:.1f}<br>"
+            "Presencia: %{customdata[0]:.0f}% (%{customdata[1]} combos)<br>"
+            "Menciones totales: %{customdata[2]}<extra></extra>"
+        ),
     ))
     fig_brands.update_layout(
         paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
         font=dict(color="#94A3B8", family="Inter", size=11),
         height=max(300, len(b_agg) * 42 + 60),
-        title=dict(text="Posición Promedio por Marca (Ponderada)", font=dict(size=13, color="#F1F5F9")),
-        margin=dict(t=50, b=30, l=110, r=50),
-        xaxis=dict(range=[0, max_pos + 2], title=dict(text="Posición (menor = mejor)", font=dict(size=10)),
+        title=dict(text="Posición Promedio por Marca · % Presencia en prompts", font=dict(size=13, color="#F1F5F9")),
+        margin=dict(t=50, b=30, l=110, r=80),
+        xaxis=dict(range=[0, max_pos + 3], title=dict(text="Posición (menor = mejor)", font=dict(size=10)),
                    gridcolor="#1e2d44", zerolinecolor="#1e2d44"),
         yaxis=dict(autorange="reversed", title="", tickfont=dict(size=12),
                    gridcolor="#1e2d44", zerolinecolor="#1e2d44"))
@@ -1092,5 +1103,4 @@ def drill_close(n):
 
 if __name__ == "__main__":
     app.run(debug=False, host="0.0.0.0", port=int(os.environ.get("PORT", 8050)))
-
 
