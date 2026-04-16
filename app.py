@@ -93,20 +93,105 @@ def make_options(series, label_map=None):
         opts.append({"label": (label_map or {}).get(v, v), "value": v})
     return opts
 
-def make_batch_options(met):
+
+COUNTRY_LABELS = {"CO": "Colombia", "DO": "República Dominicana", "CR": "Costa Rica", "MX": "México"}
+MONTH_LABELS = {
+    "01": "Ene", "02": "Feb", "03": "Mar", "04": "Abr",
+    "05": "May", "06": "Jun", "07": "Jul", "08": "Ago",
+    "09": "Sep", "10": "Oct", "11": "Nov", "12": "Dic",
+}
+
+def ensure_batch_time_cols(df):
+    if df is None or len(df) == 0:
+        return df
+    df = df.copy()
+    if "batch_month" not in df.columns or df["batch_month"].isna().all():
+        if "batch_date" in df.columns:
+            bd = pd.to_datetime(df["batch_date"], errors="coerce")
+            df["batch_month"] = bd.dt.strftime("%Y-%m")
+        elif "batch_id" in df.columns:
+            df["batch_month"] = df["batch_id"].astype(str).str[:6].apply(
+                lambda s: f"{s[:4]}-{s[4:6]}" if len(s) >= 6 else None
+            )
+    return df
+
+def format_period_label(period):
+    if not period:
+        return "Último mes disponible"
+    try:
+        year, month = str(period).split("-")
+        return f"{MONTH_LABELS.get(month, month)} {year}"
+    except Exception:
+        return str(period)
+
+def format_batch_label(batch_id, country_id=None, include_country=False):
     from datetime import datetime
-    opts = [{"label": "Último batch", "value": ""}]
-    if "batch_id" not in met.columns or len(met) == 0:
-        return opts
-    batches = sorted(met["batch_id"].dropna().unique(), reverse=True)
-    for b in batches:
-        try:
-            dt = datetime.strptime(b[:15], "%Y%m%dT%H%M%S")
-            label = dt.strftime("%b %d, %Y %H:%M")
-        except Exception:
-            label = b
-        opts.append({"label": label, "value": b})
+    if not batch_id:
+        return "Más reciente"
+    try:
+        dt = datetime.strptime(str(batch_id)[:15], "%Y%m%dT%H%M%S")
+        label = f"{dt.day:02d} {MONTH_LABELS.get(dt.strftime('%m'), dt.strftime('%m'))} {dt.strftime('%H:%M')}"
+    except Exception:
+        label = str(batch_id)
+    if include_country and country_id:
+        return f"{country_id} · {label}"
+    return label
+
+def make_period_options(met, country=""):
+    met = ensure_batch_time_cols(met)
+    if len(met) == 0:
+        return [{"label": "Último mes disponible", "value": ""}]
+    base = met.copy()
+    if country:
+        base = base[base["country_id"] == country]
+    if len(base) == 0 or "batch_month" not in base.columns:
+        return [{"label": "Último mes disponible", "value": ""}]
+    periods = sorted(base["batch_month"].dropna().astype(str).unique(), reverse=True)
+    opts = [{"label": "Último mes disponible", "value": ""}]
+    opts.extend({"label": format_period_label(p), "value": p} for p in periods)
     return opts
+
+def make_run_options(met, country="", period=""):
+    met = ensure_batch_time_cols(met)
+    if len(met) == 0 or "batch_id" not in met.columns:
+        return [{"label": "Más reciente", "value": ""}]
+    base = met.copy()
+    if country:
+        base = base[base["country_id"] == country]
+    if period:
+        base = base[base["batch_month"] == period]
+    if len(base) == 0:
+        return [{"label": "Más reciente", "value": ""}]
+    run_meta = (
+        base.groupby("batch_id", as_index=False)
+        .agg(country_id=("country_id", "first"), batch_date=("batch_date", "first"))
+        .sort_values("batch_id", ascending=False)
+    )
+    include_country = not bool(country)
+    opts = [{"label": "Más reciente", "value": ""}]
+    for _, row in run_meta.iterrows():
+        opts.append({
+            "label": format_batch_label(row["batch_id"], row.get("country_id"), include_country=include_country),
+            "value": row["batch_id"]
+        })
+    return opts
+
+def resolve_effective_period_and_batch(met, country="", period="", run=""):
+    met = ensure_batch_time_cols(met)
+    if len(met) == 0:
+        return None, None, 0, met
+    base = met.copy()
+    if country:
+        base = base[base["country_id"] == country]
+    if len(base) == 0:
+        return None, None, 0, base
+    periods = sorted(base["batch_month"].dropna().astype(str).unique(), reverse=True) if "batch_month" in base.columns else []
+    effective_period = period if period and period in periods else (periods[0] if periods else None)
+    if effective_period:
+        base = base[base["batch_month"] == effective_period]
+    runs = sorted(base["batch_id"].dropna().astype(str).unique(), reverse=True)
+    effective_batch = run if run and run in runs else (runs[0] if runs else None)
+    return effective_period, effective_batch, len(runs), base
 
 def kpi_card(label, value, color, sub):
     return html.Div(className="kpi-card", children=[
@@ -310,8 +395,13 @@ def serve_layout():
                          value="", clearable=False, searchable=False),
         ]),
         html.Div(className="filter-group", children=[
-            html.Div("Batch", className="filter-label"),
-            dcc.Dropdown(id="f-batch", options=make_batch_options(MET),
+            html.Div("Mes", className="filter-label"),
+            dcc.Dropdown(id="f-period", options=make_period_options(MET),
+                         value="", clearable=False, searchable=False),
+        ]),
+        html.Div(className="filter-group", children=[
+            html.Div("Corrida", className="filter-label"),
+            dcc.Dropdown(id="f-run", options=[{"label": "Más reciente", "value": ""}],
                          value="", clearable=False, searchable=False),
         ]),
         html.Hr(className="sidebar-divider"),
@@ -456,6 +546,34 @@ def serve_layout():
 
 app.layout = serve_layout
 
+# ── Dropdowns reactivos ───────────────────────────────────────────────
+@callback(
+    Output("f-period", "options"),
+    Output("f-period", "value"),
+    Input("f-pais", "value"),
+    State("f-period", "value"),
+)
+def update_period_dropdown(pais, current_period):
+    MET, _, _, _ = get_data()
+    opts = make_period_options(MET, pais)
+    valid = {o["value"] for o in opts}
+    value = current_period if current_period in valid and current_period != "" else ""
+    return opts, value
+
+@callback(
+    Output("f-run", "options"),
+    Output("f-run", "value"),
+    Input("f-pais", "value"),
+    Input("f-period", "value"),
+    State("f-run", "value"),
+)
+def update_run_dropdown(pais, period, current_run):
+    MET, _, _, _ = get_data()
+    opts = make_run_options(MET, pais, period)
+    valid = {o["value"] for o in opts}
+    value = current_run if current_run in valid and current_run != "" else ""
+    return opts, value
+
 # ── Callback ──────────────────────────────────────────────────────────
 @callback(
     Output("header-sub", "children"),
@@ -481,16 +599,16 @@ app.layout = serve_layout
     Input("f-funnel", "value"),
     Input("f-cat", "value"),
     Input("f-motor", "value"),
-    Input("f-batch", "value"),
+    Input("f-period", "value"),
+    Input("f-run", "value"),
 )
-def update_dashboard(pais, funnel, cat, motor, batch):
+def update_dashboard(pais, funnel, cat, motor, period, run):
     MET, MAR, DOM, RESP = get_data()
-    # Resolver batch efectivo: si no seleccionan uno, usar el más reciente
-    latest_batch = None
-    if "batch_id" in MET.columns and len(MET):
-        latest_batch = sorted(MET["batch_id"].dropna().unique(), reverse=True)[0]
+    MET = ensure_batch_time_cols(MET)
 
-    effective_batch = batch or latest_batch
+    effective_period, effective_batch, period_run_count, period_base = resolve_effective_period_and_batch(
+        MET, pais, period, run
+    )
 
     # ── Filter ────────────────────────────────────────────────────────
     fm = MET.copy()
@@ -516,11 +634,8 @@ def update_dashboard(pais, funnel, cat, motor, batch):
     keys = set(fm["prompt_id"] + "|" + fm["model_source"])
     fd = fd_base[fd_base.apply(lambda r: f"{r['prompt_id']}|{r['model_source']}" in keys, axis=1)]
 
-    batch_display = (
-        fm.iloc[0]["batch_date"]
-        if len(fm) and "batch_date" in fm.columns
-        else (effective_batch or "—")
-    )
+    period_label = format_period_label(effective_period)
+    batch_label = format_batch_label(effective_batch, pais, include_country=False)
     n = len(fm)
     empty_fig = go.Figure().update_layout(
         paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
@@ -528,22 +643,40 @@ def update_dashboard(pais, funnel, cat, motor, batch):
 
     if n == 0:
         empty = "Sin datos para los filtros seleccionados."
-        return (empty, [], f"Batch: {batch_display}", f"Batch {batch_display}", [],
+        period_info = period_label if effective_period else "Sin período"
+        return (empty, [], f"País: {COUNTRY_LABELS.get(pais, pais) if pais else 'Todos'} · {period_info}",
+                f"{period_info} · {batch_label}", [],
                 empty_fig, empty_fig, empty_fig, empty_fig, [], [],
                 [], [], "", empty_fig, "", empty_fig, [], [])
 
     # ── Header ────────────────────────────────────────────────────────
-    header_sub = f"Dashboard MVP \u00b7 Batch {batch_display} \u00b7 {n} prompt\u00d7motor"
+    country_label = COUNTRY_LABELS.get(pais, pais) if pais else "Todos los países"
     t_ok = int(fm["num_success"].sum())
     t_r = int(fm["num_replicates"].sum())
+    runs_msg = (
+        f"mostrando corrida más reciente de {period_run_count} disponibles"
+        if period_run_count > 1 and not run else
+        (f"corrida seleccionada · {period_run_count} disponibles" if period_run_count > 1 else "1 corrida disponible")
+    )
+    header_sub = f"Dashboard MVP · {country_label} · {period_label} · {runs_msg} · {n} prompt×motor"
     header_badges = [
-        html.Span(f"\u25cf {t_ok}/{t_r} OK", className="badge",
+        html.Span(f"● {t_ok}/{t_r} OK", className="badge",
                   style={"background": "#34D39922", "color": "#34D399"}),
-        html.Span("MX", className="badge",
+        html.Span(country_label, className="badge",
                   style={"background": "#60A5FA22", "color": "#60A5FA"}),
     ]
-    sidebar_info = f"Batch: {batch_display}\nArquitectura Dual"
-    footer_batch = f"Batch {batch_display}"
+    if effective_batch:
+        header_badges.append(
+            html.Span(format_batch_label(effective_batch, pais, include_country=False), className="badge",
+                      style={"background": "#FBBF2422", "color": "#FBBF24"})
+        )
+    if period_run_count > 1:
+        header_badges.append(
+            html.Span(f"{period_run_count} corridas en el mes", className="badge",
+                      style={"background": "#FB923C22", "color": "#FB923C"})
+        )
+    sidebar_info = f"País: {country_label}\nMes: {period_label}\nCorrida efectiva: {format_batch_label(effective_batch, pais, include_country=False)}\nArquitectura Dual"
+    footer_batch = f"{country_label} · {period_label} · {format_batch_label(effective_batch, pais, include_country=False)}"
 
     # ── KPIs ──────────────────────────────────────────────────────────
     avg_mr = fm["mention_rate"].mean()
@@ -884,10 +1017,11 @@ _ML_REV = {v: k for k, v in ML.items()}
     State("f-funnel", "value"),
     State("f-cat", "value"),
     State("f-motor", "value"),
-    State("f-batch", "value"),
+    State("f-period", "value"),
+    State("f-run", "value"),
     prevent_initial_call=True,
 )
-def drill_open(active_cell, keys_data, pais, funnel, cat, motor, batch):
+def drill_open(active_cell, keys_data, pais, funnel, cat, motor, period, run):
     MET, MAR, DOM, RESP = get_data()
     hidden = {"display": "none"}
 
@@ -903,11 +1037,10 @@ def drill_open(active_cell, keys_data, pais, funnel, cat, motor, batch):
         model_source = key.get("model_source", "")
         row_batch = key.get("batch_id", None)
     else:
-        # Fallback: reconstruct row order from current filters
-        latest_batch = None
-        if "batch_id" in MET.columns and len(MET):
-            latest_batch = sorted(MET["batch_id"].dropna().unique(), reverse=True)[0]
-        row_batch = batch or latest_batch
+        # Fallback: reconstruct row order from current filters using the effective run
+        MET = ensure_batch_time_cols(MET)
+        _, resolved_batch, _, _ = resolve_effective_period_and_batch(MET, pais, period, run)
+        row_batch = resolved_batch
 
         fm = MET.copy()
         if pais:
@@ -927,7 +1060,7 @@ def drill_open(active_cell, keys_data, pais, funnel, cat, motor, batch):
         model_source = row["model_source"]
         row_batch = row.get("batch_id", None)
 
-    effective_batch = row_batch or batch
+    effective_batch = row_batch or run
 
     # Look up full metric row — filter by effective_batch to avoid cross-batch mixing
     met_base = MET[MET["batch_id"] == effective_batch] if effective_batch else MET
