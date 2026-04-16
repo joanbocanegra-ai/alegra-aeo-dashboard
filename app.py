@@ -694,8 +694,11 @@ def update_dashboard(pais, funnel, cat, motor, batch):
         paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
         font=dict(color="#94A3B8", family="Inter", size=11),
         height=max(300, len(b_agg) * 42 + 60),
-        title=dict(text="Posición Promedio por Marca · % Presencia en prompts", font=dict(size=13, color="#F1F5F9")),
-        margin=dict(t=50, b=30, l=110, r=80),
+        title=dict(
+            text="Posición Promedio por Marca · % Presencia en prompts<br><sup style='color:#64748B;font-size:10px'>Marcas con baja presencia aparecen atenuadas</sup>",
+            font=dict(size=13, color="#F1F5F9")
+        ),
+        margin=dict(t=65, b=30, l=110, r=80),
         xaxis=dict(range=[0, max_pos + 3], title=dict(text="Posición (menor = mejor)", font=dict(size=10)),
                    gridcolor="#1e2d44", zerolinecolor="#1e2d44"),
         yaxis=dict(autorange="reversed", title="", tickfont=dict(size=12),
@@ -1117,3 +1120,5 @@ def drill_close(n):
 
 if __name__ == "__main__":
     app.run(debug=False, host="0.0.0.0", port=int(os.environ.get("PORT", 8050)))
+
+
