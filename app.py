@@ -81,7 +81,8 @@ BC = {
     "Alegra": "#2DD4BF", "CONTPAQi": "#60A5FA", "Aspel": "#FBBF24",
     "QuickBooks": "#A78BFA", "Bind ERP": "#F87171", "Microsip": "#FB923C",
     "Miskuentas": "#F472B6", "Contalink": "#34D399", "Siigo": "#818CF8",
-    "Odoo": "#A3A3A3",
+    "Odoo": "#A3A3A3", "SAP": "#0070F2", "NetSuite": "#F05A28",
+    "ClickBalance": "#7C3AED",
 }
 CHART_LAYOUT = dict(
     paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
@@ -1254,6 +1255,22 @@ def drill_open(active_cell, keys_data, pais, funnel, cat, motor, period, run):
     prevent_initial_call=True,
 )
 def drill_close(n):
+    return {"display": "none"}
+
+
+# ── Drill-down callback: CLOSE when filters change ───────────────────
+# Evita que el panel muestre un detalle viejo bajo un contexto nuevo
+@callback(
+    Output("drill-panel", "style", allow_duplicate=True),
+    Input("f-pais",   "value"),
+    Input("f-funnel", "value"),
+    Input("f-cat",    "value"),
+    Input("f-motor",  "value"),
+    Input("f-period", "value"),
+    Input("f-run",    "value"),
+    prevent_initial_call=True,
+)
+def drill_close_on_filter_change(*_):
     return {"display": "none"}
 
 
