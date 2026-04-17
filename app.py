@@ -220,12 +220,20 @@ def resolve_effective_period_and_batch(met, country="", period="", run=""):
     effective_batch = run if run and run in runs else (runs[0] if runs else None)
     return effective_period, effective_batch, len(runs), base
 
-def kpi_card(label, value, color, sub):
-    return html.Div(className="kpi-card", children=[
+def kpi_card(label, value, color, sub, tooltip=""):
+    children = [
         html.Div(label, className="kpi-label"),
         html.Div(value, className="kpi-value", style={"color": color}),
         html.Div(sub, className="kpi-sub"),
-    ])
+    ]
+    if tooltip:
+        children.append(
+            html.Div(
+                dcc.Markdown(tooltip, dangerously_allow_html=False),
+                className="kpi-tooltip",
+            )
+        )
+    return html.Div(className="kpi-card", children=children)
 
 def hex_to_rgba(h, a):
     h = h.lstrip("#")
@@ -269,10 +277,16 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
 .badge{padding:3px 10px;border-radius:12px;font-size:10px;font-weight:600}
 .section-label{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--dim);margin:24px 0 10px 0}
 .kpi-row{display:grid;grid-template-columns:repeat(6,1fr);gap:10px}
-.kpi-card{background:linear-gradient(135deg,var(--card),#1e2a3f);border:1px solid var(--border);border-radius:12px;padding:14px 12px;text-align:center}
+.kpi-card{position:relative;background:linear-gradient(135deg,var(--card),#1e2a3f);border:1px solid var(--border);border-radius:12px;padding:14px 12px;text-align:center;transition:border-color .2s}
+.kpi-card:hover{border-color:#475569}
 .kpi-label{font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:3px}
 .kpi-value{font-size:24px;font-weight:800;letter-spacing:-.02em;line-height:1.1}
 .kpi-sub{font-size:9px;color:var(--dim);margin-top:3px}
+.kpi-tooltip{display:none;position:absolute;bottom:calc(100% + 10px);left:50%;transform:translateX(-50%);background:#0d1829;border:1px solid #334155;border-radius:10px;padding:11px 14px;font-size:11px;color:#CBD5E1;line-height:1.55;width:230px;text-align:left;z-index:9999;pointer-events:none;box-shadow:0 8px 32px rgba(0,0,0,.6);white-space:normal}
+.kpi-tooltip b{color:#F1F5F9;font-weight:600}
+.kpi-tooltip p{margin:0;padding:0}
+.kpi-tooltip::after{content:'';position:absolute;top:100%;left:50%;transform:translateX(-50%);border:6px solid transparent;border-top-color:#334155}
+.kpi-card:hover .kpi-tooltip{display:block}
 .chart-row{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
 .chart-box{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;overflow:hidden}
 .chart-half{display:grid;grid-template-columns:1fr 1fr;gap:14px}
@@ -749,13 +763,66 @@ def update_dashboard(pais, funnel, cat, motor, period, run):
         _leader_sub = "Sin cohorte persistente"
 
     kpis = [
-        kpi_card("Mention Rate", f"{round(avg_mr * 100)}%", "#2DD4BF", f"Promedio {n} combos"),
-        kpi_card("Citation Rate", f"{round(avg_cr * 100)}%", "#60A5FA", "Marca citada como fuente"),
-        kpi_card("Consistency", f"{round(avg_cs)}%", "#FBBF24", "Combos con \u22652/3 r\xe9plicas"),
-        kpi_card("Alegra Pos. Avg", f"#{avg_rk:.1f}", "#FB923C", "Rank ponderado Alegra"),
+        kpi_card("Mention Rate", f"{round(avg_mr * 100)}%", "#2DD4BF", f"Promedio {n} combos",
+            tooltip=(
+                "**¿Qué mide?** Porcentaje de réplicas donde Alegra es mencionada "
+                "en la respuesta del modelo.\n\n"
+                "**Cálculo:** promedio de `mention_rate` sobre todos los combos "
+                "prompt × motor activos. Cada combo corre 3 réplicas; "
+                "mention_rate = réplicas con mención / 3.\n\n"
+                f"**Base:** {n} combos prompt × motor en el filtro actual."
+            )),
+        kpi_card("Citation Rate", f"{round(avg_cr * 100)}%", "#60A5FA", "Marca citada como fuente",
+            tooltip=(
+                "**¿Qué mide?** Porcentaje de réplicas donde un dominio del "
+                "ecosistema Alegra (alegra.com, ayuda.alegra.com, etc.) aparece "
+                "citado como fuente por el modelo.\n\n"
+                "**Diferencia con Mention Rate:** Alegra puede ser *mencionada* "
+                "en texto sin ser *citada* como enlace fuente. Citation Rate "
+                "mide autoridad percibida, no solo mención."
+            )),
+        kpi_card("Consistency", f"{round(avg_cs)}%", "#FBBF24", "Combos con \u22652/3 r\xe9plicas",
+            tooltip=(
+                "**¿Qué mide?** Porcentaje de combos prompt × motor donde Alegra "
+                "aparece en **al menos 2 de 3 réplicas** (mention_rate ≥ 0.67).\n\n"
+                "**Por qué importa:** los LLMs son no deterministas. Si solo "
+                "aparecemos en 1/3 réplicas, la mención es ruido. "
+                "Consistency mide cuán *estable* es nuestra presencia.\n\n"
+                "**Interpretación:** 100% = Alegra aparece en ≥2/3 réplicas "
+                "en todos los prompts del filtro."
+            )),
+        kpi_card("Alegra Pos. Avg", f"#{avg_rk:.1f}", "#FB923C", "Rank ponderado Alegra",
+            tooltip=(
+                "**¿Qué mide?** Posición promedio de Alegra en los rankings "
+                "generados por el modelo, considerando solo los combos donde "
+                "Alegra es mencionada.\n\n"
+                "**Escala:** #1 = primera marca mencionada. Menor número = "
+                "mejor posición.\n\n"
+                "**Nota:** si Alegra no aparece en un combo, ese combo "
+                "no entra en el promedio."
+            )),
         kpi_card("Marca Líder", top_b["brand_name"] if top_b is not None else "\u2014", "#F472B6",
-                 _leader_sub),
-        kpi_card("Eco Share", f"{round(eco_pct)}%", "#34D399", f"{eco_t}/{tot_t} citas ecosistema"),
+                 _leader_sub,
+            tooltip=(
+                "**¿Qué mide?** La marca con mayor presencia y mejor posición "
+                "dentro del cohorte persistente del filtro actual.\n\n"
+                "**Lógica jerárquica:**\n"
+                "1. Cohorte ≥50% presencia → gana la de mejor posición\n"
+                "2. Si no hay, cohorte ≥30% → ídem\n"
+                "3. Si no hay, cohorte ≥15% → ídem\n"
+                "4. Si nadie llega al 15%, no hay Marca Líder\n\n"
+                "**Presencia** = % de combos donde la marca aparece al menos una vez."
+            )),
+        kpi_card("Eco Share", f"{round(eco_pct)}%", "#34D399", f"{eco_t}/{tot_t} citas ecosistema",
+            tooltip=(
+                "**¿Qué mide?** Porcentaje de citas totales que apuntan al "
+                "ecosistema Alegra vs. todos los dominios citados.\n\n"
+                "**Ecosistema Alegra:** alegra.com, ayuda.alegra.com, "
+                "blog.alegra.com y dominios relacionados.\n\n"
+                f"**En este filtro:** {eco_t} citas ecosistema de {tot_t} totales. "
+                "Mayor Eco Share = los modelos perciben a Alegra como "
+                "fuente de autoridad en el tema."
+            )),
     ]
 
     # ── Chart 1: Mention & Citation by Motor ──────────────────────────
