@@ -99,10 +99,16 @@ BC = {
     "Nominapp":      "#D946EF", "Factorial":   "#FB7185", "Loggro":      "#FDE68A",
     "Aliaddo":       "#A7F3D0", "Softland ERP": "#CBD5E1",
     # ── DO ────────────────────────────────────────────────────────────
-    "FacturandoRD":  "#F43F5E", "ProVenta":    "#7C3AED",
+    "FacturandoRD":    "#F43F5E", "ProVenta":          "#7C3AED",
+    "ARCADIGPOS":      "#FCA5A5", "Xoe":               "#FCD34D",
+    "Cashflow":        "#6EE7B7", "Alanube":           "#93C5FD",
+    "The Factory HKA": "#C084FC", "NominaRD":          "#FDA4AF",
+    "Csuite ERP":      "#86EFAC", "GyleERP":           "#FDE68A",
     # ── CR ────────────────────────────────────────────────────────────
-    "GTI":           "#A855F7", "Qupos":       "#10B981", "PROCOM":      "#F97316",
-    "Facturele":     "#E879F9",
+    "GTI":             "#A855F7", "Qupos":             "#10B981", "PROCOM": "#F97316",
+    "Facturele":       "#E879F9", "Dora":              "#67E8F9",
+    "Tico Factura":    "#BEF264", "Facturar CR":       "#D9F99D",
+    "FinanzaPro":      "#FDE68A", "FacturaProfesional": "#C7D2FE",
 }
 CHART_LAYOUT = dict(
     paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
