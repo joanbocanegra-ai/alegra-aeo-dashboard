@@ -293,6 +293,18 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
 .header-badges{display:flex;gap:6px;margin-top:6px}
 .badge{padding:3px 10px;border-radius:12px;font-size:10px;font-weight:600}
 .section-label{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--dim);margin:24px 0 10px 0}
+.section-label-row{display:flex;align-items:center;gap:8px;margin:24px 0 10px 0}
+.section-label-text{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--dim)}
+.help-wrap{position:relative;display:inline-flex;align-items:center}
+.help-icon{display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border-radius:50%;border:1px solid #475569;color:#64748B;font-size:9px;font-weight:700;cursor:default;line-height:1;flex-shrink:0;transition:border-color .15s,color .15s}
+.help-icon:hover{border-color:#94A3B8;color:#CBD5E1}
+.help-tooltip{display:none;position:absolute;top:calc(100% + 8px);left:50%;transform:translateX(-50%);background:#0d1829;border:1px solid #334155;border-radius:10px;padding:12px 14px;font-size:11px;color:#CBD5E1;line-height:1.55;width:290px;text-align:left;z-index:9999;pointer-events:none;box-shadow:0 8px 32px rgba(0,0,0,.6);white-space:normal}
+.help-tooltip p{margin:0 0 8px 0;padding:0}
+.help-tooltip p:last-child{margin-bottom:0}
+.help-tooltip b{color:#F1F5F9;font-weight:600}
+.help-tooltip .ht-dim{color:#64748B;font-size:10px;margin-top:6px}
+.help-tooltip::after{content:'';position:absolute;bottom:100%;left:50%;transform:translateX(-50%);border:6px solid transparent;border-bottom-color:#334155}
+.help-wrap:hover .help-tooltip{display:block}
 .kpi-row{display:grid;grid-template-columns:repeat(6,1fr);gap:10px}
 .kpi-card{position:relative;background:linear-gradient(135deg,var(--card),#1e2a3f);border:1px solid var(--border);border-radius:12px;padding:14px 12px;text-align:center;transition:border-color .2s}
 .kpi-card:hover{border-color:#475569}
@@ -485,7 +497,18 @@ def serve_layout():
             html.Div(className="chart-box", children=[dcc.Graph(id="chart-eco", config={"displayModeBar": False})]),
         ]),
         # Brand Ranking
-        html.Div("Ranking de Marcas Competidoras", className="section-label"),
+        html.Div(className="section-label-row", children=[
+            html.Span("Ranking de Marcas Competidoras", className="section-label-text"),
+            html.Div(className="help-wrap", children=[
+                html.Span("?", className="help-icon"),
+                html.Div(className="help-tooltip", children=[
+                    html.P([html.B("Presencia (%)"), " — % de combos prompt\u00d7motor donde esta marca aparece al menos 1 vez en cualquiera de las 3 r\xe9plicas. Opera sobre cualquier marca del mercado."]),
+                    html.P([html.B("vs. Mention Rate"), " — el Mention Rate es exclusivo de Alegra y mide en qu\xe9 fracci\xf3n de las 3 r\xe9plicas aparece por combo. Presencia solo pregunta \u201c\u00bfaparece al menos una vez?\u201d, sin importar en cu\xe1ntas r\xe9plicas."]),
+                    html.P([html.B("vs. Consistency Score"), " — Consistency mide combos donde Alegra aparece en \u22652/3 r\xe9plicas (se\xf1al estable). Presencia no exige estabilidad: con 1/3 r\xe9plicas ya cuenta."]),
+                    html.P("\u25a0 Barras en gris = presencia <15% (aparici\xf3n puntual, no persistente).", className="ht-dim"),
+                ]),
+            ]),
+        ]),
         html.Div(className="chart-half", children=[
             html.Div(className="chart-box", children=[dcc.Graph(id="chart-brands", config={"displayModeBar": False})]),
             html.Div([
