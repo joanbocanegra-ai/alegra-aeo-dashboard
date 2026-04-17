@@ -282,10 +282,10 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
 .kpi-label{font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:3px}
 .kpi-value{font-size:24px;font-weight:800;letter-spacing:-.02em;line-height:1.1}
 .kpi-sub{font-size:9px;color:var(--dim);margin-top:3px}
-.kpi-tooltip{display:none;position:absolute;bottom:calc(100% + 10px);left:50%;transform:translateX(-50%);background:#0d1829;border:1px solid #334155;border-radius:10px;padding:11px 14px;font-size:11px;color:#CBD5E1;line-height:1.55;width:230px;text-align:left;z-index:9999;pointer-events:none;box-shadow:0 8px 32px rgba(0,0,0,.6);white-space:normal}
+.kpi-tooltip{display:none;position:absolute;top:calc(100% + 10px);left:50%;transform:translateX(-50%);background:#0d1829;border:1px solid #334155;border-radius:10px;padding:11px 14px;font-size:11px;color:#CBD5E1;line-height:1.55;width:230px;text-align:left;z-index:9999;pointer-events:none;box-shadow:0 8px 32px rgba(0,0,0,.6);white-space:normal}
 .kpi-tooltip b{color:#F1F5F9;font-weight:600}
 .kpi-tooltip p{margin:0;padding:0}
-.kpi-tooltip::after{content:'';position:absolute;top:100%;left:50%;transform:translateX(-50%);border:6px solid transparent;border-top-color:#334155}
+.kpi-tooltip::after{content:'';position:absolute;bottom:100%;left:50%;transform:translateX(-50%);border:6px solid transparent;border-bottom-color:#334155}
 .kpi-card:hover .kpi-tooltip{display:block}
 .chart-row{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
 .chart-box{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;overflow:hidden}
@@ -1374,7 +1374,5 @@ def drill_close_on_filter_change(*_):
 
 if __name__ == "__main__":
     app.run(debug=False, host="0.0.0.0", port=int(os.environ.get("PORT", 8050)))
-
-
 
 
