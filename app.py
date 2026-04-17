@@ -824,13 +824,20 @@ def update_dashboard(pais, funnel, cat, motor, period, run):
     # ── Chart 4: Brand ranking ────────────────────────────────────────
     max_pos = b_agg["weighted_pos"].max() if len(b_agg) else 1
 
-    # Opacidad: presencia >= 15% → 1.0 | < 15% → 0.35
+    # Color: presencia >= 15% → color de marca completo
+    #        5–14%  → color de marca atenuado (0.45)
+    #        < 5%   → gris neutro (sin color de marca)
     def _bar_color(row):
-        base = BC.get(row["brand_name"], "#64748B")
-        opacity = 1.0 if row["coverage_pct"] >= 15 else 0.35
-        h = base.lstrip("#")
-        r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
-        return f"rgba({r},{g},{b},{opacity})"
+        pct = row["coverage_pct"]
+        if pct >= 15:
+            return BC.get(row["brand_name"], "#64748B")
+        elif pct >= 5:
+            base = BC.get(row["brand_name"], "#64748B")
+            h = base.lstrip("#")
+            rv, gv, bv = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+            return f"rgba({rv},{gv},{bv},0.45)"
+        else:
+            return "rgba(100,116,139,0.30)"   # gris neutro, sin identidad de marca
 
     bar_colors = b_agg.apply(_bar_color, axis=1).tolist()
 
@@ -1296,6 +1303,5 @@ def drill_close_on_filter_change(*_):
 
 if __name__ == "__main__":
     app.run(debug=False, host="0.0.0.0", port=int(os.environ.get("PORT", 8050)))
-
 
 
