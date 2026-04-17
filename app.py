@@ -54,18 +54,24 @@ def load_data():
         print(f"[load_data] ERROR conectando a DB: {e}")
         return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), _empty_resp
 
+import time as _time
 _data_cache = {}
+_CACHE_TTL  = 1800   # segundos — recarga datos cada 30 min automáticamente
+
 def get_data():
-    if not _data_cache:
+    now = _time.monotonic()
+    expired = _data_cache.get('loaded_at', 0) + _CACHE_TTL < now
+    if not _data_cache or expired:
         met, mar, dom, resp = load_data()
         if met.empty:
             # No cachear estado de error → próximo request reintentará automáticamente
             return met, mar, dom, resp
-        _data_cache['MET']  = met
-        _data_cache['MAR']  = mar
-        _data_cache['DOM']  = dom
-        _data_cache['RESP'] = resp
-        _data_cache['ok']   = True
+        _data_cache['MET']       = met
+        _data_cache['MAR']       = mar
+        _data_cache['DOM']       = dom
+        _data_cache['RESP']      = resp
+        _data_cache['ok']        = True
+        _data_cache['loaded_at'] = now
     return _data_cache['MET'], _data_cache['MAR'], _data_cache['DOM'], _data_cache['RESP']
 
 # ── Constants ─────────────────────────────────────────────────────────
