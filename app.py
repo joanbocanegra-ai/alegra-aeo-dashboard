@@ -708,7 +708,7 @@ def update_dashboard(pais, funnel, cat, motor, period, run):
     # ── KPIs ──────────────────────────────────────────────────────────
     avg_mr = fm["mention_rate"].mean()
     avg_cr = fm["citation_rate"].mean()
-    avg_cs = fm["consistency_score"].mean() if "consistency_score" in fm.columns else 0
+    avg_cs = (fm["mention_rate"] >= 0.67).mean() * 100 if len(fm) else 0
     avg_rk = fm["avg_rank_alegra"].mean()
     eco_t = int(fm["eco_cites"].sum())
     tot_t = int(fm["total_cites"].sum())
@@ -751,7 +751,7 @@ def update_dashboard(pais, funnel, cat, motor, period, run):
     kpis = [
         kpi_card("Mention Rate", f"{round(avg_mr * 100)}%", "#2DD4BF", f"Promedio {n} combos"),
         kpi_card("Citation Rate", f"{round(avg_cr * 100)}%", "#60A5FA", "Marca citada como fuente"),
-        kpi_card("Consistency", f"{round(avg_cs)}%", "#FBBF24", "Estabilidad en réplicas"),
+        kpi_card("Consistency", f"{round(avg_cs)}%", "#FBBF24", "Combos con \u22652/3 r\xe9plicas"),
         kpi_card("Alegra Pos. Avg", f"#{avg_rk:.1f}", "#FB923C", "Rank ponderado Alegra"),
         kpi_card("Marca Líder", top_b["brand_name"] if top_b is not None else "\u2014", "#F472B6",
                  _leader_sub),
@@ -1162,7 +1162,7 @@ def drill_open(active_cell, keys_data, pais, funnel, cat, motor, period, run):
         html.Div("Métricas AEO", className="drill-col-title"),
         metric_row("Mention Rate", f"{m['mention_rate']:.0%}"),
         metric_row("Citation Rate", f"{m['citation_rate']:.0%}"),
-        metric_row("Consistency Score", f"{m['consistency_score']:.0f}"),
+        metric_row("Consistency Score", "Consistente" if m["mention_rate"] >= 0.67 else "Inconsistente"),
         metric_row("Posición promedio", f"#{avg_rank:.1f}"),
         metric_row("Posición % texto", f"{avg_pos_pct:.1f}%"),
         metric_row("Menciones promedio", f"{avg_mentions}"),
@@ -1307,6 +1307,7 @@ def drill_close_on_filter_change(*_):
 
 if __name__ == "__main__":
     app.run(debug=False, host="0.0.0.0", port=int(os.environ.get("PORT", 8050)))
+
 
 
 
