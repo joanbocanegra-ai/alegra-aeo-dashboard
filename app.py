@@ -729,12 +729,24 @@ def update_dashboard(pais, funnel, cat, motor, period, run):
         ascending=[True, False, False]
     )
 
-    # KPI "Marca Líder" — umbral mínimo de presencia (10% de prompts, mínimo 5)
-    # Solo aplica al headline; b_agg completo sigue disponible para gráficos y tablas
-    _min_count = max(5, math.ceil(n_prompts * 0.10))
-    _eligible  = b_agg[b_agg["count"] >= _min_count]
-    _eligible  = _eligible if len(_eligible) else b_agg   # fallback: todos
-    top_b = _eligible.iloc[0] if len(_eligible) else None
+    # KPI "Marca Líder" — lógica jerárquica: primero persistencia, luego posición
+    # Cohorte persistente en cascada: 50% → 30% → 15% → sin líder
+    # Dentro del cohorte: weighted_pos asc, coverage_pct desc, mentions desc
+    def _find_leader(agg):
+        for threshold in (50, 30, 15):
+            cohort = agg[agg["coverage_pct"] >= threshold].sort_values(
+                ["weighted_pos", "coverage_pct", "mentions"],
+                ascending=[True, False, False]
+            )
+            if len(cohort):
+                return cohort.iloc[0], threshold
+        return None, None
+
+    top_b, _leader_threshold = _find_leader(b_agg)
+    if top_b is not None:
+        _leader_sub = f"Pos. #{top_b['weighted_pos']:.1f} · {top_b['coverage_pct']:.0f}% presencia"
+    else:
+        _leader_sub = "Sin cohorte persistente"
 
     kpis = [
         kpi_card("Mention Rate", f"{round(avg_mr * 100)}%", "#2DD4BF", f"Promedio {n} combos"),
@@ -742,7 +754,7 @@ def update_dashboard(pais, funnel, cat, motor, period, run):
         kpi_card("Consistency", f"{round(avg_cs)}%", "#FBBF24", "Estabilidad en réplicas"),
         kpi_card("Alegra Pos. Avg", f"#{avg_rk:.1f}", "#FB923C", "Rank ponderado Alegra"),
         kpi_card("Marca Líder", top_b["brand_name"] if top_b is not None else "\u2014", "#F472B6",
-                 f"Pos. ponderada #{top_b['weighted_pos']:.1f}" if top_b is not None else ""),
+                 _leader_sub),
         kpi_card("Eco Share", f"{round(eco_pct)}%", "#34D399", f"{eco_t}/{tot_t} citas ecosistema"),
     ]
 
