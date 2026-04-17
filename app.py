@@ -825,19 +825,11 @@ def update_dashboard(pais, funnel, cat, motor, period, run):
     max_pos = b_agg["weighted_pos"].max() if len(b_agg) else 1
 
     # Color: presencia >= 15% → color de marca completo
-    #        5–14%  → color de marca atenuado (0.45)
-    #        < 5%   → gris neutro (sin color de marca)
+    #        < 15%  → gris neutro (sin identidad de marca)
     def _bar_color(row):
-        pct = row["coverage_pct"]
-        if pct >= 15:
+        if row["coverage_pct"] >= 15:
             return BC.get(row["brand_name"], "#64748B")
-        elif pct >= 5:
-            base = BC.get(row["brand_name"], "#64748B")
-            h = base.lstrip("#")
-            rv, gv, bv = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
-            return f"rgba({rv},{gv},{bv},0.45)"
-        else:
-            return "rgba(100,116,139,0.30)"   # gris neutro, sin identidad de marca
+        return "rgba(100,116,139,0.28)"
 
     bar_colors = b_agg.apply(_bar_color, axis=1).tolist()
 
@@ -1303,5 +1295,6 @@ def drill_close_on_filter_change(*_):
 
 if __name__ == "__main__":
     app.run(debug=False, host="0.0.0.0", port=int(os.environ.get("PORT", 8050)))
+
 
 
