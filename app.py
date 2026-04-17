@@ -109,6 +109,17 @@ BC = {
     "Facturele":       "#E879F9", "Dora":              "#67E8F9",
     "Tico Factura":    "#BEF264", "Facturar CR":       "#D9F99D",
     "FinanzaPro":      "#FDE68A", "FacturaProfesional": "#C7D2FE",
+    "G-Estión":        "#A5F3FC", "FacturaYa":          "#FEF08A",
+    # ── CR Tier A ─────────────────────────────────────────────────────
+    "e-FacturaCR":     "#7DD3FC", "Facture.cr":         "#C4B5FD",
+    "Factelec CR":     "#F9A8D4", "Infinitech":         "#5EEAD4",
+    "Factoa":          "#FDE047",
+    # ── CR Tier B ─────────────────────────────────────────────────────
+    "IOplat":          "#FB7185", "FACTURATica":        "#A3E635",
+    "Integra Factura": "#38BDF8", "PosFactura":         "#D946EF",
+    "Talentify":       "#F59E0B", "SoftDial ERP":       "#14B8A6",
+    "Lúcida":          "#8B5CF6", "Mentesis":           "#EC4899",
+    "DAC Solutions":   "#EAB308",
 }
 CHART_LAYOUT = dict(
     paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
