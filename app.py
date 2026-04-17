@@ -78,11 +78,31 @@ def get_data():
 ML = {"chatgpt_search": "ChatGPT", "google_aio": "AI Overview"}
 MC = {"chatgpt_search": "#2DD4BF", "google_aio": "#60A5FA"}
 BC = {
-    "Alegra": "#2DD4BF", "CONTPAQi": "#60A5FA", "Aspel": "#FBBF24",
-    "QuickBooks": "#A78BFA", "Bind ERP": "#F87171", "Microsip": "#FB923C",
-    "Miskuentas": "#F472B6", "Contalink": "#34D399", "Siigo": "#818CF8",
-    "Odoo": "#A3A3A3", "SAP": "#0070F2", "NetSuite": "#F05A28",
-    "ClickBalance": "#7C3AED",
+    # ── Tier 0 ────────────────────────────────────────────────────────
+    "Alegra":        "#2DD4BF", "CONTPAQi":    "#60A5FA", "Aspel":       "#FBBF24",
+    "QuickBooks":    "#A78BFA", "Bind ERP":    "#F87171", "Microsip":    "#FB923C",
+    "Miskuentas":   "#F472B6", "Contalink":   "#34D399", "Siigo":       "#818CF8",
+    "Xero":          "#13B5EA", "Holded":      "#E879F9", "Odoo":        "#A3A3A3",
+    # ── MX ────────────────────────────────────────────────────────────
+    "Factura.com":   "#22D3EE", "Facturama":   "#4ADE80", "SIFO":        "#FCD34D",
+    "EdiFactMx":     "#6EE7B7", "Facturador SAT": "#FCA5A5", "Facturaly": "#C4B5FD",
+    "Zoho Books":    "#EC4899", "Sage":        "#0891B2", "Heru":        "#10B981",
+    "Autofactura":   "#8B5CF6", "ClickBalance": "#7C3AED",
+    "SICAR":         "#F59E0B", "Pulpos":      "#38BDF8", "Eleventa":    "#A3E635",
+    "ManagementPro": "#E11D48", "MyBusiness":  "#7DD3FC", "Contadigital": "#94A3B8",
+    "ALPHA ERP":     "#D97706", "Contafy":     "#6D28D9", "Sinube":      "#059669",
+    "SAP":           "#0070F2", "NetSuite":    "#F05A28",
+    # ── CO ────────────────────────────────────────────────────────────
+    "Vendty":        "#06B6D4", "World Office": "#3B82F6", "Helisa":     "#EF4444",
+    "Cuenti":        "#14B8A6", "ContaPyme":   "#F59E0B", "Treinta":     "#6366F1",
+    "Siesa":         "#84CC16", "TNS":         "#64748B", "Buk":         "#0EA5E9",
+    "Nominapp":      "#D946EF", "Factorial":   "#FB7185", "Loggro":      "#FDE68A",
+    "Aliaddo":       "#A7F3D0", "Softland ERP": "#CBD5E1",
+    # ── DO ────────────────────────────────────────────────────────────
+    "FacturandoRD":  "#F43F5E", "ProVenta":    "#7C3AED",
+    # ── CR ────────────────────────────────────────────────────────────
+    "GTI":           "#A855F7", "Qupos":       "#10B981", "PROCOM":      "#F97316",
+    "Facturele":     "#E879F9",
 }
 CHART_LAYOUT = dict(
     paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
@@ -1276,5 +1296,6 @@ def drill_close_on_filter_change(*_):
 
 if __name__ == "__main__":
     app.run(debug=False, host="0.0.0.0", port=int(os.environ.get("PORT", 8050)))
+
 
 
