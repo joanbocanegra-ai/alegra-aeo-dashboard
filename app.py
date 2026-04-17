@@ -502,10 +502,21 @@ def serve_layout():
             html.Div(className="help-wrap", children=[
                 html.Span("?", className="help-icon"),
                 html.Div(className="help-tooltip", children=[
-                    html.P([html.B("Presencia (%)"), " — % de combos prompt\u00d7motor donde esta marca aparece al menos 1 vez en cualquiera de las 3 r\xe9plicas. Opera sobre cualquier marca del mercado."]),
-                    html.P([html.B("vs. Mention Rate"), " — el Mention Rate es exclusivo de Alegra y mide en qu\xe9 fracci\xf3n de las 3 r\xe9plicas aparece por combo. Presencia solo pregunta \u201c\u00bfaparece al menos una vez?\u201d, sin importar en cu\xe1ntas r\xe9plicas."]),
-                    html.P([html.B("vs. Consistency Score"), " — Consistency mide combos donde Alegra aparece en \u22652/3 r\xe9plicas (se\xf1al estable). Presencia no exige estabilidad: con 1/3 r\xe9plicas ya cuenta."]),
-                    html.P("\u25a0 Barras en gris = presencia <15% (aparici\xf3n puntual, no persistente).", className="ht-dim"),
+                    html.P("Las 3 m\xe9tricas miden lo mismo con distinto umbral:", style={"color":"#94A3B8","margin":"0 0 6px 0"}),
+                    html.P([html.B("Presencia \u2265\u202f1/3"), " \u2014 \u00bfla marca apareci\xf3 al menos 1 vez? S\xcd/NO. Aplica a cualquier marca."]),
+                    html.P([html.B("Consistency \u2265\u202f2/3"), " \u2014 \u00bfAlegra apareci\xf3 en \u22652 r\xe9plicas? Umbral m\xe1s exigente. Solo Alegra."]),
+                    html.P([html.B("Mention Rate"), " \u2014 promedio continuo de r\xe9plicas con Alegra (sin umbral). Solo Alegra."]),
+                    html.P("Ejemplo \u2014 mismo combo, 3 r\xe9plicas:", style={"color":"#94A3B8","margin":"8px 0 4px 0"}),
+                    html.P([
+                        "CO-001 (3/3): Pres \u2714 \u00b7 Cons \u2714 \u00b7 MR 100%", html.Br(),
+                        "CO-002 (1/3): Pres \u2714 \u00b7 Cons \u2717 \u00b7 MR\u202f33%", html.Br(),
+                        "CO-003 (0/3): Pres \u2717 \u00b7 Cons \u2717 \u00b7 MR\u202f\u202f0%",
+                    ], style={"fontFamily":"monospace","fontSize":"10px","color":"#94A3B8","lineHeight":"1.9","margin":"0 0 6px 0"}),
+                    html.P([
+                        "Presencia\u202f67% \u00b7 Consistency\u202f33% \u00b7 MR\u202f44%", html.Br(),
+                        html.Span("CO-002 cuenta para Presencia pero NO para Consistency.", style={"color":"#FBBF24"}),
+                    ], style={"fontSize":"10px","margin":"0 0 8px 0"}),
+                    html.P("\u25a0 Barras en gris = presencia <15% (aparici\xf3n puntual).", className="ht-dim"),
                 ]),
             ]),
         ]),
@@ -1414,5 +1425,6 @@ def drill_close_on_filter_change(*_):
 
 if __name__ == "__main__":
     app.run(debug=False, host="0.0.0.0", port=int(os.environ.get("PORT", 8050)))
+
 
 
