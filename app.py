@@ -98,6 +98,18 @@ BC = {
     "Siesa":         "#84CC16", "TNS":         "#64748B", "Buk":         "#0EA5E9",
     "Nominapp":      "#D946EF", "Factorial":   "#FB7185", "Loggro":      "#FDE68A",
     "Aliaddo":       "#A7F3D0", "Softland ERP": "#CBD5E1",
+    # ── CO Tier 2: mayo 2026 ──────────────────────────────────────────
+    "Wardian":         "#FF6B6B", "Yearvis POS":     "#4ECDC4",
+    "Kontador":        "#45B7D1", "Mister Robot":    "#96CEB4",
+    "Alysa Cloud":     "#FFEAA7", "Regtrix":         "#DDA0DD",
+    "GouJana":         "#98D8C8", "Finantic":        "#F7DC6F",
+    "Meganomina":      "#BB8FCE", "TECNOPOS":        "#85C1E9",
+    "MiPOS Digital":   "#F0B27A", "OficinaPro":      "#A9DFBF",
+    "Fudo":            "#F1948A", "Datak":           "#AED6F1",
+    "Posfac":          "#A8E6CF", "VistroPOS":       "#FFD3B6",
+    "Kontalid":        "#D7BDE2", "Pluss100":        "#A2D9CE",
+    "FacturaColombia": "#FADBD8", "Facturatech":     "#D5E8D4",
+    "PhantomApp":      "#DAE8FC",
     # ── DO ────────────────────────────────────────────────────────────
     "FacturandoRD":    "#F43F5E", "ProVenta":          "#7C3AED",
     "ARCADIGPOS":      "#FCA5A5", "Xoe":               "#FCD34D",
@@ -1425,6 +1437,3 @@ def drill_close_on_filter_change(*_):
 
 if __name__ == "__main__":
     app.run(debug=False, host="0.0.0.0", port=int(os.environ.get("PORT", 8050)))
-
-
-
