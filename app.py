@@ -52,7 +52,22 @@ def load_data():
         return met, mar, dom, resp
     except Exception as e:
         print(f"[load_data] ERROR conectando a DB: {e}")
-        return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), _empty_resp
+        _empty_met = pd.DataFrame(columns=[
+            "country_id", "funnel_stage", "product_category", "model_source",
+            "batch_id", "batch_date", "batch_month", "prompt_id",
+            "mention_rate", "citation_rate", "avg_rank_alegra",
+            "eco_cites", "total_cites", "num_success", "num_replicates",
+        ])
+        _empty_mar = pd.DataFrame(columns=[
+            "country_id", "funnel_stage", "product_category", "model_source",
+            "batch_id", "batch_date", "batch_month", "prompt_id",
+            "brand_name", "brand_rank_avg", "brand_mentions_total",
+        ])
+        _empty_dom = pd.DataFrame(columns=[
+            "batch_id", "prompt_id", "model_source",
+            "domain", "cite_count", "is_ecosystem",
+        ])
+        return _empty_met, _empty_mar, _empty_dom, _empty_resp
 
 import time as _time
 _data_cache = {}
@@ -327,7 +342,7 @@ server = app.server  # for deployment
 
 @server.route("/healthz")
 def healthz():
-    if _data_cache and not _data_cache.get('ok', True):
+    if not _data_cache or not _data_cache.get('ok', True):
         return {"status": "db_error"}, 503
     return {"status": "ok"}, 200
 
