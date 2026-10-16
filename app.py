@@ -3,6 +3,8 @@ import pandas as pd
 import plotly.graph_objects as go
 from dash import Dash, html, dcc, callback, Output, Input, State, ctx, dash_table
 
+import gs_leadership
+
 # ── DB ────────────────────────────────────────────────────────────────
 # Dual mode: Supabase (PostgreSQL) in production, SQLite for local dev
 DATABASE_URL = os.environ.get("DATABASE_URL")
@@ -208,6 +210,52 @@ CHART_LAYOUT = dict(
     yaxis=dict(gridcolor="#1e2d44", zerolinecolor="#1e2d44"),
 )
 
+# ── Co-liderazgo (empates) — determinista, sin pseudo-marca ────────────
+# Resuelve el/los líder(es) por combo (batch × prompt × motor) desde la tabla
+# `marcas`. Usa rangos EXACTOS cuando están disponibles (brand_ranks_by_rep), de
+# modo que datos nuevos y históricos muestran coliderazgo. La etiqueta
+# 'Empate: A y B' es sólo texto de UI: nunca se resuelve contra BC ni se usa
+# como clave de agregación o filtro.
+def _combo_leader_labels(mar_df):
+    if mar_df is None or len(mar_df) == 0:
+        return {}
+    return gs_leadership.combo_leader_labels(mar_df.to_dict("records"))
+
+
+def _leader_color(label):
+    return gs_leadership.leader_badge_color(label, BC)
+
+
+def _resolve_leader_label(mar_df, batch_id, prompt_id, model_source, fallback=None,
+                          n_success=None):
+    if mar_df is None or len(mar_df) == 0:
+        return fallback
+    sub = mar_df
+    if batch_id is not None:
+        sub = sub[sub["batch_id"] == batch_id]
+    sub = sub[(sub["prompt_id"] == prompt_id) & (sub["model_source"] == model_source)]
+    if len(sub) == 0:
+        return fallback
+    # Soporte mínimo por mayoría; NO_LEADER_LABEL no cae al top_brand guardado.
+    label = gs_leadership.group_leader_label(sub.to_dict("records"), n_success=n_success)
+    return label if label else fallback
+
+
+def _leader_rank_text(mar_df, metric_row, label):
+    """Posición del líder mostrado, tomada de marcas (coherente con la etiqueta
+    recalculada); vacío si no hay líder consistente."""
+    names = gs_leadership.parse_top_brand_label(label)
+    if not names or mar_df is None or len(mar_df) == 0:
+        return ""
+    sub = mar_df[(mar_df["prompt_id"] == metric_row["prompt_id"])
+                 & (mar_df["model_source"] == metric_row["model_source"])
+                 & (mar_df["brand_name"].isin(names))]
+    if "batch_id" in mar_df.columns and metric_row.get("batch_id") is not None:
+        sub = sub[sub["batch_id"] == metric_row.get("batch_id")]
+    vals = sub["brand_rank_avg"].dropna()
+    return f" {fmt_rank(vals.min())}" if len(vals) else ""
+
+
 # ── Helpers ───────────────────────────────────────────────────────────
 def make_options(series, label_map=None):
     vals = sorted(series.dropna().unique())
@@ -315,6 +363,13 @@ def resolve_effective_period_and_batch(met, country="", period="", run=""):
     runs = sorted(base["batch_id"].dropna().astype(str).unique(), reverse=True)
     effective_batch = run if run and run in runs else (runs[0] if runs else None)
     return effective_period, effective_batch, len(runs), base
+
+def fmt_rank(value):
+    """'#1.5' para una posición; 'Sin posición' para NULL/NaN (nunca '#nan' ni 0)."""
+    if value is None or pd.isna(value):
+        return "Sin posición"
+    return f"#{float(value):.1f}"
+
 
 def kpi_card(label, value, color, sub, tooltip=""):
     children = [
@@ -860,17 +915,21 @@ def update_dashboard(pais, funnel, cat, motor, period, run):
     n_prompts = fm["prompt_id"].nunique()
 
     # Brand aggregation
+    # Presencia y posición son independientes: una fila de marcas puede tener
+    # brand_rank_avg NULL (mención sin posición). count = combos con mención
+    # (cobertura); ranked = combos con posición (soporte del promedio).
     b_agg = fb.groupby("brand_name").agg(
         rank_sum=("brand_rank_avg", "sum"),
-        count=("brand_rank_avg", "count"),
+        count=("brand_name", "size"),
+        ranked=("brand_rank_avg", "count"),
         mentions=("brand_mentions_total", "sum"),
     ).reset_index()
-    b_agg["weighted_pos"]  = b_agg["rank_sum"] / b_agg["count"]
+    b_agg["weighted_pos"]  = b_agg["rank_sum"] / b_agg["ranked"].where(b_agg["ranked"] > 0)
     n_combos               = len(fm)
     b_agg["coverage_pct"]  = (b_agg["count"] / n_combos * 100).round(1)
     b_agg = b_agg.sort_values(
         ["weighted_pos", "coverage_pct", "mentions"],
-        ascending=[True, False, False]
+        ascending=[True, False, False], na_position="last"
     )
 
     # KPI "Marca Líder" — lógica jerárquica: primero persistencia, luego posición
@@ -878,7 +937,8 @@ def update_dashboard(pais, funnel, cat, motor, period, run):
     # Dentro del cohorte: weighted_pos asc, coverage_pct desc, mentions desc
     def _find_leader(agg):
         for threshold in (50, 30, 15):
-            cohort = agg[agg["coverage_pct"] >= threshold].sort_values(
+            # marcas sin ninguna posición no compiten por liderazgo
+            cohort = agg[(agg["coverage_pct"] >= threshold) & (agg["ranked"] > 0)].sort_values(
                 ["weighted_pos", "coverage_pct", "mentions"],
                 ascending=[True, False, False]
             )
@@ -898,8 +958,8 @@ def update_dashboard(pais, funnel, cat, motor, period, run):
                 "**¿Qué mide?** Porcentaje de réplicas donde Alegra es mencionada "
                 "en la respuesta del modelo.\n\n"
                 "**Cálculo:** promedio de `mention_rate` sobre todos los combos "
-                "prompt × motor activos. Cada combo corre 3 réplicas; "
-                "mention_rate = réplicas con mención / 3.\n\n"
+                "prompt × motor activos. Cada combo apunta a 3 réplicas; "
+                "mention_rate = réplicas con mención / réplicas válidas (2 o 3).\n\n"
                 f"**Base:** {n} combos prompt × motor en el filtro actual."
             )),
         kpi_card("Citation Rate", f"{round(avg_cr * 100)}%", "#60A5FA", "Marca citada como fuente",
@@ -921,7 +981,7 @@ def update_dashboard(pais, funnel, cat, motor, period, run):
                 "**Interpretación:** 100% = Alegra aparece en ≥2/3 réplicas "
                 "en todos los prompts del filtro."
             )),
-        kpi_card("Alegra Pos. Avg", f"#{avg_rk:.1f}", "#FB923C", "Rank ponderado Alegra",
+        kpi_card("Alegra Pos. Avg", fmt_rank(avg_rk), "#FB923C", "Rank ponderado Alegra",
             tooltip=(
                 "**¿Qué mide?** Posición promedio de Alegra en los rankings "
                 "generados por el modelo, considerando solo los combos donde "
@@ -1047,13 +1107,13 @@ def update_dashboard(pais, funnel, cat, motor, period, run):
         y=b_agg["brand_name"], x=b_agg["weighted_pos"],
         marker_color=bar_colors,
         text=b_agg.apply(
-            lambda r: f"#{r['weighted_pos']:.1f} · {r['coverage_pct']:.0f}% presencia", axis=1
+            lambda r: f"{fmt_rank(r['weighted_pos'])} · {r['coverage_pct']:.0f}% presencia", axis=1
         ),
         textposition="outside", textfont=dict(size=11, color="#94A3B8"),
-        customdata=b_agg[["coverage_pct", "count", "mentions"]].values,
+        customdata=b_agg[["coverage_pct", "count", "mentions", "ranked"]].values,
         hovertemplate=(
             "<b>%{y}</b><br>"
-            "Posición promedio: #%{x:.1f}<br>"
+            "Posición promedio: #%{x:.1f} (%{customdata[3]} combos con posición)<br>"
             "Presencia: %{customdata[0]:.0f}% (%{customdata[1]} combos)<br>"
             "Menciones totales: %{customdata[2]}<extra></extra>"
         ),
@@ -1073,11 +1133,16 @@ def update_dashboard(pais, funnel, cat, motor, period, run):
                    gridcolor="#1e2d44", zerolinecolor="#1e2d44"))
 
     # ── Leader list ───────────────────────────────────────────────────
+    # Etiqueta y color deterministas por combo; un empate muestra co-liderazgo.
+    leader_labels = _combo_leader_labels(fb)
     leader_items = []
     for _, r in fm.iterrows():
         ml = ML.get(r["model_source"], r["model_source"])
         mc = MC.get(r["model_source"], "#999")
-        bc = BC.get(r["top_brand"], "#64748B")
+        label = leader_labels.get((r.get("batch_id"), r["prompt_id"], r["model_source"]))
+        if label is None:
+            label = r["top_brand"] if pd.notna(r.get("top_brand")) else "—"
+        bc = _leader_color(label)
         leader_items.append(html.Div(className="leader-row", children=[
             html.Div([
                 html.Span(r["prompt_id"], style={"fontSize": "12px", "fontWeight": "600"}),
@@ -1087,10 +1152,10 @@ def update_dashboard(pais, funnel, cat, motor, period, run):
             ]),
             html.Div([
                 html.Span("Líder: ", style={"fontSize": "9px", "color": "var(--muted)"}),
-                html.Span(r["top_brand"], style={"background": f"{bc}22", "color": bc,
+                html.Span(label, style={"background": f"{bc}22", "color": bc,
                           "padding": "2px 7px", "borderRadius": "4px",
                           "fontSize": "10px", "fontWeight": "600"}),
-                html.Span(f" #{r['top_brand_rank']:.1f}",
+                html.Span(_leader_rank_text(fb, r, label),
                           style={"fontWeight": "700", "color": bc, "fontSize": "11px"}),
             ]),
         ]))
@@ -1123,7 +1188,7 @@ def update_dashboard(pais, funnel, cat, motor, period, run):
             "prompt_id": r["prompt_id"],
             "motor": ML.get(r["model_source"], r["model_source"]),
             "brand_name": r["brand_name"],
-            "rank_avg": f"#{r['brand_rank_avg']:.1f}",
+            "rank_avg": fmt_rank(r["brand_rank_avg"]),
             "presence": f"{r['brand_presence_pct']}%",
             "brand_mentions_total": r["brand_mentions_total"],
             "brand_ranks_by_rep": r["brand_ranks_by_rep"],
@@ -1195,8 +1260,14 @@ def update_dashboard(pais, funnel, cat, motor, period, run):
     avg_a = f"{aa['avg_rank_alegra'].mean():.1f}" if len(aa) else "\u2014"
 
     n_cite = ac[ac["citation_rate"] == 0]["prompt_id"].tolist()
-    branded_leaders = fm[fm["product_category"] == "Branded"]["top_brand"].unique().tolist()
-    generic_leaders = fm[fm["product_category"] != "Branded"]["top_brand"].unique().tolist()
+    # Nombres de líderes por segmento derivados de las etiquetas por combo
+    # (los empates aportan ambos nombres, nunca un pseudo-brand "Empate: …").
+    _branded = fm[fm["product_category"] == "Branded"]
+    _generic = fm[fm["product_category"] != "Branded"]
+    branded_leaders = gs_leadership.segment_leader_names(
+        leader_labels.get((r["batch_id"], r["prompt_id"], r["model_source"])) for _, r in _branded.iterrows())
+    generic_leaders = gs_leadership.segment_leader_names(
+        leader_labels.get((r["batch_id"], r["prompt_id"], r["model_source"])) for _, r in _generic.iterrows())
 
     insights = [
         html.Div(className="insight-box", children=[
@@ -1307,7 +1378,8 @@ def drill_open(active_cell, keys_data, pais, funnel, cat, motor, period, run):
     # Brand data for this prompt+motor
     mar_base = MAR[MAR["batch_id"] == effective_batch] if effective_batch else MAR
     brands = mar_base[(mar_base["prompt_id"] == prompt_id) & (mar_base["model_source"] == model_source)].copy()
-    brands = brands.sort_values("brand_rank_avg")
+    brands = brands.sort_values(["brand_rank_avg", "brand_presence_pct"],
+                                ascending=[True, False], na_position="last")
 
     # Domain data for this prompt+motor
     dom_base = DOM[DOM["batch_id"] == effective_batch] if effective_batch else DOM
@@ -1319,8 +1391,12 @@ def drill_open(active_cell, keys_data, pais, funnel, cat, motor, period, run):
     motor_color = MC.get(model_source, "#60A5FA")
 
     # ── Header ────────────────────────────────────────────────────────
-    top_brand = m["top_brand"] if pd.notna(m.get("top_brand")) else "—"
-    top_brand_color = BC.get(top_brand, "#64748B")
+    # Etiqueta determinista (empates → coliderazgo) desde la tabla de marcas.
+    top_brand = _resolve_leader_label(
+        MAR, effective_batch, prompt_id, model_source,
+        fallback=(m["top_brand"] if pd.notna(m.get("top_brand")) else "—"),
+        n_success=(m["num_success"] if pd.notna(m.get("num_success")) else None))
+    top_brand_color = _leader_color(top_brand)
 
     header = html.Div(className="drill-header", children=[
         html.Div(className="drill-header-left", children=[
@@ -1360,7 +1436,7 @@ def drill_open(active_cell, keys_data, pais, funnel, cat, motor, period, run):
         metric_row("Mention Rate", f"{m['mention_rate']:.0%}"),
         metric_row("Citation Rate", f"{m['citation_rate']:.0%}"),
         metric_row("Consistency Score", "Consistente" if m["mention_rate"] >= 0.67 else "Inconsistente"),
-        metric_row("Posición promedio", f"#{avg_rank:.1f}"),
+        metric_row("Posición promedio", fmt_rank(avg_rank)),
         metric_row("Posición % texto", f"{avg_pos_pct:.1f}%"),
         metric_row("Menciones promedio", f"{avg_mentions}"),
     ])
@@ -1368,17 +1444,17 @@ def drill_open(active_cell, keys_data, pais, funnel, cat, motor, period, run):
     # ── Column 2: Ranking de Marcas ───────────────────────────────────
     brand_rows = []
     for i, (_, b) in enumerate(brands.iterrows()):
-        trophy = "🏆" if i < 3 else ""
+        rank_val = b["brand_rank_avg"]
+        trophy = "🏆" if i < 3 and pd.notna(rank_val) else ""
         bname = b["brand_name"]
         bcolor = BC.get(bname, "#64748B")
-        rank_val = b["brand_rank_avg"]
         presence = b.get("brand_presence_pct", 0)
         mentions = b.get("brand_mentions_total", 0)
 
         brand_rows.append(html.Div(className="drill-brand-row", children=[
             html.Span(trophy, className="drill-brand-trophy"),
             html.Span(bname, className="drill-brand-name", style={"color": bcolor}),
-            html.Span(f"#{rank_val:.1f}", className="drill-brand-rank"),
+            html.Span(fmt_rank(rank_val), className="drill-brand-rank"),
             html.Span(f"({mentions} mencs, {presence}%)", className="drill-brand-info"),
         ]))
 
