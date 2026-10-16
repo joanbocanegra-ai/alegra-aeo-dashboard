@@ -1054,7 +1054,7 @@ def update_dashboard(pais, funnel, cat, motor, period, run):
             row = mf[mf["prompt_id"] == p]
             v = row["avg_rank_alegra"].values[0] if len(row) else None
             vals.append(v)
-            texts.append(f"#{v:.1f}" if v is not None else "")
+            texts.append(f"#{v:.1f}" if v is not None and pd.notna(v) else "")
         fig_pos.add_trace(go.Bar(
             name=ML.get(m, m), orientation="h", y=prompts, x=vals,
             marker_color=MC.get(m, "#999"),
@@ -1208,7 +1208,9 @@ def update_dashboard(pais, funnel, cat, motor, period, run):
             "mention_rate": f"{r['mention_rate']:.2f}",
             "citation_rate": f"{r['citation_rate']:.2f}",
             "consistency_score": f"{r['consistency_score']:.0f}",
-            "avg_rank_alegra": f"#{r['avg_rank_alegra']:.1f}",
+            # Alegra sin posición en el combo → guion, nunca '#nan'
+            "avg_rank_alegra": (f"#{r['avg_rank_alegra']:.1f}" if pd.notna(r["avg_rank_alegra"])
+                                else "—"),
             "eco_share_pct": f"{r['eco_share_pct']:.0f}%",
             "total_cites": int(r["total_cites"]),
         })
@@ -1256,8 +1258,8 @@ def update_dashboard(pais, funnel, cat, motor, period, run):
     # ── Insights ──────────────────────────────────────────────────────
     ac = fm[fm["model_source"] == "chatgpt_search"]
     aa = fm[fm["model_source"] == "google_aio"]
-    avg_c = f"{ac['avg_rank_alegra'].mean():.1f}" if len(ac) else "\u2014"
-    avg_a = f"{aa['avg_rank_alegra'].mean():.1f}" if len(aa) else "\u2014"
+    avg_c = f"{ac['avg_rank_alegra'].mean():.1f}" if ac["avg_rank_alegra"].notna().any() else "\u2014"
+    avg_a = f"{aa['avg_rank_alegra'].mean():.1f}" if aa["avg_rank_alegra"].notna().any() else "\u2014"
 
     n_cite = ac[ac["citation_rate"] == 0]["prompt_id"].tolist()
     # Nombres de líderes por segmento derivados de las etiquetas por combo
