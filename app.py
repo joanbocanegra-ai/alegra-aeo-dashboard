@@ -5,6 +5,9 @@ from dash import Dash, html, dcc, callback, Output, Input, State, ctx, dash_tabl
 
 import gs_leadership
 
+# Exact fraction: 2/3 stored as 0.6667 must not fail a rounded 0.67 cutoff.
+CONSISTENCY_MIN_RATE = 2 / 3
+
 # ── DB ────────────────────────────────────────────────────────────────
 # Dual mode: Supabase (PostgreSQL) in production, SQLite for local dev
 DATABASE_URL = os.environ.get("DATABASE_URL")
@@ -907,7 +910,7 @@ def update_dashboard(pais, funnel, cat, motor, period, run):
     # ── KPIs ──────────────────────────────────────────────────────────
     avg_mr = fm["mention_rate"].mean()
     avg_cr = fm["citation_rate"].mean()
-    avg_cs = (fm["mention_rate"] >= 0.67).mean() * 100 if len(fm) else 0
+    avg_cs = (fm["mention_rate"] >= CONSISTENCY_MIN_RATE).mean() * 100 if len(fm) else 0
     avg_rk = fm["avg_rank_alegra"].mean()
     eco_t = int(fm["eco_cites"].sum())
     tot_t = int(fm["total_cites"].sum())
@@ -974,11 +977,12 @@ def update_dashboard(pais, funnel, cat, motor, period, run):
         kpi_card("Consistency", f"{round(avg_cs)}%", "#FBBF24", "Combos con \u22652/3 r\xe9plicas",
             tooltip=(
                 "**¿Qué mide?** Porcentaje de combos prompt × motor donde Alegra "
-                "aparece en **al menos 2 de 3 réplicas** (mention_rate ≥ 0.67).\n\n"
+                "aparece en **al menos dos tercios de las réplicas válidas**. "
+                "Con 3 válidas exige 2; con 2 válidas exige ambas.\n\n"
                 "**Por qué importa:** los LLMs son no deterministas. Si solo "
                 "aparecemos en 1/3 réplicas, la mención es ruido. "
                 "Consistency mide cuán *estable* es nuestra presencia.\n\n"
-                "**Interpretación:** 100% = Alegra aparece en ≥2/3 réplicas "
+                "**Interpretación:** 100% = Alegra aparece en ≥2/3 de las réplicas válidas "
                 "en todos los prompts del filtro."
             )),
         kpi_card("Alegra Pos. Avg", fmt_rank(avg_rk), "#FB923C", "Rank ponderado Alegra",
@@ -1437,7 +1441,7 @@ def drill_open(active_cell, keys_data, pais, funnel, cat, motor, period, run):
         html.Div("Métricas AEO", className="drill-col-title"),
         metric_row("Mention Rate", f"{m['mention_rate']:.0%}"),
         metric_row("Citation Rate", f"{m['citation_rate']:.0%}"),
-        metric_row("Consistency Score", "Consistente" if m["mention_rate"] >= 0.67 else "Inconsistente"),
+        metric_row("Consistency Score", "Consistente" if m["mention_rate"] >= CONSISTENCY_MIN_RATE else "Inconsistente"),
         metric_row("Posición promedio", fmt_rank(avg_rank)),
         metric_row("Posición % texto", f"{avg_pos_pct:.1f}%"),
         metric_row("Menciones promedio", f"{avg_mentions}"),
