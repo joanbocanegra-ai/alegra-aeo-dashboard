@@ -367,6 +367,36 @@ def resolve_effective_period_and_batch(met, country="", period="", run=""):
     effective_batch = run if run and run in runs else (runs[0] if runs else None)
     return effective_period, effective_batch, len(runs), base
 
+
+def resolve_effective_batches(met, country="", period="", run=""):
+    """Corridas que entran en la vista.
+
+    Cada país corre en su propio batch. Con país = "Todos" y sin corrida elegida,
+    se toma la corrida más reciente de CADA país en el mes (no el batch más
+    reciente a secas, que sería solo el último país en correr).
+    Devuelve (periodo, [batch_ids], corridas_en_el_mes, base_del_mes).
+    """
+    effective_period, effective_batch, run_count, base = resolve_effective_period_and_batch(
+        met, country, period, run)
+    if not effective_batch:
+        return effective_period, [], run_count, base
+    if country or (run and effective_batch == run):
+        return effective_period, [effective_batch], run_count, base
+    latest = (base.dropna(subset=["batch_id"])
+              .assign(batch_id=lambda d: d["batch_id"].astype(str))
+              .groupby("country_id")["batch_id"].max())
+    return effective_period, sorted(latest.tolist(), reverse=True), run_count, base
+
+
+def format_batches_label(batch_ids, met=None, country=""):
+    """Etiqueta de la corrida efectiva; con varias, nombra los países incluidos."""
+    if len(batch_ids) <= 1:
+        return format_batch_label(batch_ids[0] if batch_ids else None, country, include_country=False)
+    countries = []
+    if met is not None and "country_id" in met.columns:
+        countries = sorted(met.loc[met["batch_id"].astype(str).isin(batch_ids), "country_id"].dropna().unique())
+    return "Última corrida de cada país" + (f" ({', '.join(countries)})" if countries else "")
+
 def fmt_rank(value):
     """'#1.5' para una posición; 'Sin posición' para NULL/NaN (nunca '#nan' ni 0)."""
     if value is None or pd.isna(value):
@@ -835,9 +865,10 @@ def update_dashboard(pais, funnel, cat, motor, period, run):
     MET, MAR, DOM, RESP = get_data()
     MET = ensure_batch_time_cols(MET)
 
-    effective_period, effective_batch, period_run_count, period_base = resolve_effective_period_and_batch(
+    effective_period, effective_batches, period_run_count, period_base = resolve_effective_batches(
         MET, pais, period, run
     )
+    multi_country = len(effective_batches) > 1
 
     # ── Filter ────────────────────────────────────────────────────────
     fm = MET.copy()
@@ -854,17 +885,17 @@ def update_dashboard(pais, funnel, cat, motor, period, run):
     if motor:
         fm = fm[fm["model_source"] == motor]
         fb = fb[fb["model_source"] == motor]
-    if effective_batch:
-        fm = fm[fm["batch_id"] == effective_batch]
-        fb = fb[fb["batch_id"] == effective_batch]
+    if effective_batches:
+        fm = fm[fm["batch_id"].astype(str).isin(effective_batches)]
+        fb = fb[fb["batch_id"].astype(str).isin(effective_batches)]
 
     # Filter dominios by batch first, then by keys present in filtered metricas
-    fd_base = DOM[DOM["batch_id"] == effective_batch] if effective_batch else DOM.copy()
+    fd_base = DOM[DOM["batch_id"].astype(str).isin(effective_batches)] if effective_batches else DOM.copy()
     keys = set(fm["prompt_id"] + "|" + fm["model_source"])
     fd = fd_base[fd_base.apply(lambda r: f"{r['prompt_id']}|{r['model_source']}" in keys, axis=1)]
 
     period_label = format_period_label(effective_period)
-    batch_label = format_batch_label(effective_batch, pais, include_country=False)
+    batch_label = format_batches_label(effective_batches, MET, pais)
     n = len(fm)
     empty_fig = go.Figure().update_layout(
         paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
@@ -883,6 +914,8 @@ def update_dashboard(pais, funnel, cat, motor, period, run):
     t_ok = int(fm["num_success"].sum())
     t_r = int(fm["num_replicates"].sum())
     runs_msg = (
+        "mostrando la corrida más reciente de cada país"
+        if multi_country else
         f"mostrando corrida más reciente de {period_run_count} disponibles"
         if period_run_count > 1 and not run else
         (f"corrida seleccionada · {period_run_count} disponibles" if period_run_count > 1 else "1 corrida disponible")
@@ -894,18 +927,18 @@ def update_dashboard(pais, funnel, cat, motor, period, run):
         html.Span(country_label, className="badge",
                   style={"background": "#60A5FA22", "color": "#60A5FA"}),
     ]
-    if effective_batch:
+    if effective_batches:
         header_badges.append(
-            html.Span(format_batch_label(effective_batch, pais, include_country=False), className="badge",
+            html.Span(batch_label, className="badge",
                       style={"background": "#FBBF2422", "color": "#FBBF24"})
         )
-    if period_run_count > 1:
+    if period_run_count > len(effective_batches):
         header_badges.append(
             html.Span(f"{period_run_count} corridas en el mes", className="badge",
                       style={"background": "#FB923C22", "color": "#FB923C"})
         )
-    sidebar_info = f"País: {country_label}\nMes: {period_label}\nCorrida efectiva: {format_batch_label(effective_batch, pais, include_country=False)}\nArquitectura Dual"
-    footer_batch = f"{country_label} · {period_label} · {format_batch_label(effective_batch, pais, include_country=False)}"
+    sidebar_info = f"País: {country_label}\nMes: {period_label}\nCorrida efectiva: {batch_label}\nArquitectura Dual"
+    footer_batch = f"{country_label} · {period_label} · {batch_label}"
 
     # ── KPIs ──────────────────────────────────────────────────────────
     avg_mr = fm["mention_rate"].mean()
@@ -1354,8 +1387,7 @@ def drill_open(active_cell, keys_data, pais, funnel, cat, motor, period, run):
     else:
         # Fallback: reconstruct row order from current filters using the effective run
         MET = ensure_batch_time_cols(MET)
-        _, resolved_batch, _, _ = resolve_effective_period_and_batch(MET, pais, period, run)
-        row_batch = resolved_batch
+        _, resolved_batches, _, _ = resolve_effective_batches(MET, pais, period, run)
 
         fm = MET.copy()
         if pais:
@@ -1366,8 +1398,8 @@ def drill_open(active_cell, keys_data, pais, funnel, cat, motor, period, run):
             fm = fm[fm["product_category"] == cat]
         if motor:
             fm = fm[fm["model_source"] == motor]
-        if row_batch:
-            fm = fm[fm["batch_id"] == row_batch]
+        if resolved_batches:
+            fm = fm[fm["batch_id"].astype(str).isin(resolved_batches)]
         if row_idx >= len(fm):
             return [], hidden
         row = fm.iloc[row_idx]
