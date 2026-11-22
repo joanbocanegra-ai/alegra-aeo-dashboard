@@ -714,7 +714,7 @@ def serve_layout():
                     {"name": "Motor", "id": "motor"},
                     {"name": "Mention", "id": "mention_rate"},
                     {"name": "Citation", "id": "citation_rate"},
-                    {"name": "Consist.", "id": "consistency_score"},
+                    {"name": "Menciones %", "id": "consistency_score"},
                     {"name": "Pos. Avg", "id": "avg_rank_alegra"},
                     {"name": "Eco Share", "id": "eco_share_pct"},
                     {"name": "Citas", "id": "total_cites"},
@@ -1211,7 +1211,10 @@ def update_dashboard(pais, funnel, cat, motor, period, run):
             "motor": ML.get(r["model_source"], r["model_source"]),
             "mention_rate": f"{r['mention_rate']:.2f}",
             "citation_rate": f"{r['citation_rate']:.2f}",
-            "consistency_score": f"{r['consistency_score']:.0f}",
+            # "Menciones %" = % de réplicas con mención de Alegra (mismo valor que antes);
+            # ✓ cuando el combo cumple ≥2 de 3 (misma regla que la tarjeta Consistency).
+            "consistency_score": (f"{r['consistency_score']:.0f}"
+                                  + (" \u2713" if r["mention_rate"] >= CONSISTENCY_MIN_RATE else "")),
             # Alegra sin posición en el combo → guion, nunca '#nan'
             "avg_rank_alegra": (f"#{r['avg_rank_alegra']:.1f}" if pd.notna(r["avg_rank_alegra"])
                                 else "—"),
